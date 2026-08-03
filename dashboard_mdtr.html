@@ -974,8 +974,8 @@ function buildPeriodTab(elId, cfg){
   var card = document.createElement('div'); card.className='card';
   card.innerHTML = '<h2 class="h" style="margin-top:0">Faturamento mensal &mdash; 2025 vs 2026</h2>'+
     '<div class="legend"><span><span class="sw" style="background:var(--baseline)"></span>2025</span><span><span class="sw" style="background:var(--s2)"></span>2026'+(cfg.applyProj?' (Jul projetado)':'')+'</span></div>';
-  card.appendChild(hGroupedBar(monthlyTrend.map(function(t){return {label:MONTH_PT[t.month], v1:t.r25, v2:t.r26_parcial};}),
-    {formatter:fmtBRL, colorA:'var(--baseline)', colorB:'var(--s2)', labelA:'2025', labelB:'2026'+(cfg.applyProj?' (parcial)':''), labelW:90}));
+  card.appendChild(hGroupedBar(monthlyTrend.map(function(t){return {label:MONTH_PT[t.month], v1:t.r25, v2:t.r26};}),
+    {formatter:fmtBRL, colorA:'var(--baseline)', colorB:'var(--s2)', labelA:'2025', labelB:'2026'+(cfg.applyProj?' (Jul projetado)':''), labelW:90}));
   el.appendChild(card);
 
   var cardMonthly = document.createElement('div'); cardMonthly.className='card';
