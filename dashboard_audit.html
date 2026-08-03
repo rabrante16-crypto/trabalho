@@ -1132,12 +1132,6 @@ function buildPrescritores(){
     kpiWrap.appendChild(tile('Prescrições EUF (atual)', fmtInt(eufSum)));
     body.appendChild(kpiWrap);
 
-    var card = document.createElement('div'); card.className='card';
-    card.innerHTML = '<h2 class="h" style="margin-top:0">Top 12 médicos por prescrições de mercado</h2>';
-    var top = rows.slice().sort(function(a,b){return b.tt_atual-a.tt_atual;}).slice(0,12).map(function(r){return {label:r.medico, value:r.tt_atual};});
-    card.appendChild(topBar(top, {formatter:fmtInt, color:'var(--s1)', labelW:200}));
-    body.appendChild(card);
-
     var card2 = document.createElement('div'); card2.className='card';
     card2.innerHTML = '<h2 class="h" style="margin-top:0">Todos os médicos do recorte</h2><p class="desc">Clique na seta para ver todos os produtos que o médico prescreve. Busque por nome.</p>';
     var rowsWithChildren = rows.map(function(r){
@@ -1158,6 +1152,21 @@ function buildPrescritores(){
       searchable:true, cap:500, defaultSortKey:'tt_atual'
     }));
     body.appendChild(card2);
+
+    var row2 = document.createElement('div'); row2.className='row2';
+    var card = document.createElement('div'); card.className='card';
+    card.innerHTML = '<h2 class="h" style="margin-top:0">Top 12 prescritores por Mercado</h2><p class="desc">Ranqueado por prescrições de mercado (TT) atuais.</p>';
+    var topMercado = rows.slice().sort(function(a,b){return b.tt_atual-a.tt_atual;}).slice(0,12).map(function(r){return {label:r.medico, value:r.tt_atual};});
+    card.appendChild(topBar(topMercado, {formatter:fmtInt, color:'var(--s1)', labelW:200}));
+    row2.appendChild(card);
+
+    var card3 = document.createElement('div'); card3.className='card';
+    card3.innerHTML = '<h2 class="h" style="margin-top:0">Top 12 prescritores por Produto</h2><p class="desc">Ranqueado por prescrições EUF (marca Eurofarma) atuais.</p>';
+    var topProduto = rows.slice().sort(function(a,b){return b.euf_atual-a.euf_atual;}).slice(0,12).map(function(r){return {label:r.medico, value:r.euf_atual};});
+    card3.appendChild(topBar(topProduto, {formatter:fmtInt, color:'var(--s3)', labelW:200}));
+    row2.appendChild(card3);
+
+    body.appendChild(row2);
   }
 
   produtoInp.addEventListener('input', scheduleRender);
