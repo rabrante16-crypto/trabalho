@@ -201,10 +201,10 @@ function hGroupedBar(items, opts){
   var fmt = opts.formatter || fmtInt;
   var colorA = opts.colorA || 'var(--baseline)';
   var colorB = opts.colorB || 'var(--s1)';
-  var rowH = 34, gap = 6, labelW = opts.labelW||240, chartW = 560, pad=8;
+  var rowH = 34, gap = 6, labelW = opts.labelW||240, chartW = 560, pad=8, valueW = 110;
   var maxV = Math.max(1, ...items.map(function(d){return Math.max(Math.abs(d.v1||0),Math.abs(d.v2||0));}));
   var h = items.length*(rowH+gap);
-  var svgW = labelW+chartW+80;
+  var svgW = labelW+chartW+valueW;
   var svg = ['<svg class="chart" viewBox="0 0 '+svgW+' '+(h+10)+'" width="100%" style="max-width:'+svgW+'px" height="'+(h+10)+'">'];
   items.forEach(function(d,i){
     var y = i*(rowH+gap);
@@ -214,7 +214,9 @@ function hGroupedBar(items, opts){
     var hl = opts.highlight && opts.highlight===d.label;
     svg.push('<text x="'+(labelW-8)+'" y="'+(y+rowH/2+4)+'" text-anchor="end" font-size="12" font-weight="'+(hl?'700':'400')+'" fill="'+(hl?'var(--text-primary)':'var(--text-secondary)')+'">'+esc(truncateToWidth(d.label,labelW-14))+'</text>');
     svg.push('<rect x="'+labelW+'" y="'+y+'" width="'+w1+'" height="'+barH+'" rx="3" fill="'+colorA+'" data-i="'+i+'" data-s="1"></rect>');
+    svg.push('<text x="'+(labelW+w1+6)+'" y="'+(y+barH/2+4)+'" font-size="10.5" fill="var(--text-secondary)">'+fmt(d.v1)+'</text>');
     svg.push('<rect x="'+labelW+'" y="'+(y+barH+6)+'" width="'+w2+'" height="'+barH+'" rx="3" fill="'+colorB+'" data-i="'+i+'" data-s="2"></rect>');
+    svg.push('<text x="'+(labelW+w2+6)+'" y="'+(y+barH+6+barH/2+4)+'" font-size="10.5" fill="var(--text-secondary)">'+fmt(d.v2)+'</text>');
   });
   svg.push('</svg>');
   var wrap = document.createElement('div');
@@ -875,7 +877,13 @@ function buildPeriodTab(elId, cfg){
       r25 += row.v[i25]||0;
       r26 += row.v[i26]||0;
     });
-    return {label: MONTH_PT[m]+'/25 vs '+MONTH_PT[m]+'/26', month:m, r25:r25, r26:r26};
+    var isProjected = cfg.applyProj && m===7;
+    return {
+      label: MONTH_PT[m]+'/25 vs '+MONTH_PT[m]+'/26', month:m, r25:r25,
+      r26_parcial: r26,
+      r26: isProjected ? r26*PROJ_FACTOR : r26,
+      isProjected: isProjected
+    };
   });
 
   var overallEvol = overall25.reais ? (overall26.reais-overall25.reais)/overall25.reais : null;
@@ -902,9 +910,27 @@ function buildPeriodTab(elId, cfg){
   var card = document.createElement('div'); card.className='card';
   card.innerHTML = '<h2 class="h" style="margin-top:0">Faturamento mensal &mdash; 2025 vs 2026</h2>'+
     '<div class="legend"><span><span class="sw" style="background:var(--baseline)"></span>2025</span><span><span class="sw" style="background:var(--s2)"></span>2026'+(cfg.applyProj?' (Jul projetado)':'')+'</span></div>';
-  card.appendChild(hGroupedBar(monthlyTrend.map(function(t){return {label:MONTH_PT[t.month], v1:t.r25, v2:t.r26};}),
-    {formatter:fmtBRL, colorA:'var(--baseline)', colorB:'var(--s2)', labelA:'2025', labelB:'2026', labelW:90}));
+  card.appendChild(hGroupedBar(monthlyTrend.map(function(t){return {label:MONTH_PT[t.month], v1:t.r25, v2:t.r26_parcial};}),
+    {formatter:fmtBRL, colorA:'var(--baseline)', colorB:'var(--s2)', labelA:'2025', labelB:'2026'+(cfg.applyProj?' (parcial)':''), labelW:90}));
   el.appendChild(card);
+
+  var cardMonthly = document.createElement('div'); cardMonthly.className='card';
+  cardMonthly.innerHTML = '<h2 class="h" style="margin-top:0">Detalhamento mensal</h2>'+
+    (cfg.applyProj ? '<p class="desc">A linha de Julho/26 mostra o valor parcial (25 dias) coletado e, ao lado, a projeção do mês cheio (×31/25) que entra na soma do YTD.</p>' : '');
+  cardMonthly.appendChild(buildTable({
+    columns: cfg.applyProj ? [
+      {key:'mes', label:'Mês', fmt:function(v){return esc(v);}},
+      {key:'r25', label:'2025', fmt:fmtBRL},
+      {key:'r26_parcial', label:'2026 (parcial se aplicável)', fmt:fmtBRL},
+      {key:'r26', label:'2026 usado no YTD', fmt:function(v,row){return row.isProjected ? ('<b>'+fmtBRL(v)+'</b> <span class="badge">projetado</span>') : fmtBRL(v);}},
+    ] : [
+      {key:'mes', label:'Mês', fmt:function(v){return esc(v);}},
+      {key:'r25', label:'2025', fmt:fmtBRL},
+      {key:'r26', label:'2026', fmt:fmtBRL},
+    ],
+    rows: monthlyTrend.map(function(t){ return Object.assign({}, t, {mes: MONTH_PT[t.month]}); })
+  }));
+  el.appendChild(cardMonthly);
 
   var card2 = document.createElement('div'); card2.className='card';
   card2.innerHTML = '<h2 class="h" style="margin-top:0">Por Setor</h2>';
