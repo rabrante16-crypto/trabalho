@@ -107,6 +107,15 @@
     z-index:50;display:none;line-height:1.5;
   }
   .badge{display:inline-block;padding:1px 7px;border-radius:20px;font-size:11px;background:var(--chip-bg);color:var(--text-secondary);}
+  @keyframes barPulse{0%,100%{filter:drop-shadow(0 0 0px var(--glow-color,var(--s4)));}50%{filter:drop-shadow(0 0 5px var(--glow-color,var(--s4)));}}
+  @keyframes badgeIn{from{opacity:0;transform:translateX(-4px);}to{opacity:1;transform:translateX(0);}}
+  @keyframes lineAppear{from{opacity:0;}to{opacity:1;}}
+  svg.chart rect.bar-hl{animation:barPulse 1.8s ease-in-out infinite;}
+  svg.chart .bar-badge{animation:badgeIn .5s ease-out both;}
+  svg.chart .cutoff-line{animation:lineAppear .8s ease-out both;}
+  @media (prefers-reduced-motion: reduce){
+    svg.chart rect.bar-hl{animation:none;filter:drop-shadow(0 0 3px var(--glow-color,var(--s4)));}
+  }
   ::-webkit-scrollbar{height:8px;width:8px;}
   ::-webkit-scrollbar-thumb{background:var(--baseline);border-radius:8px;}
 </style>
@@ -240,10 +249,14 @@ function hGroupedBar(items, opts){
 }
 
 // ================= CHART: simple top-N horizontal bars (single series) =================
+// opts.highlightTop: N (highlights the first N items -- caller must pre-sort descending) with a
+// pulsing glow + a rank badge, used to call out "top N" data points (e.g. maiores mercados).
 function topBar(items, opts){
   opts = opts||{};
   var fmt = opts.formatter || fmtInt;
   var color = opts.color || 'var(--s1)';
+  var hlColor = opts.highlightColor || 'var(--s4)';
+  var hlN = opts.highlightTop || 0;
   var rowH=26, gap=5, labelW=opts.labelW||170, chartW=380;
   var maxV = Math.max(1, ...items.map(function(d){return d.value||0;}));
   var h = items.length*(rowH+gap);
@@ -252,16 +265,59 @@ function topBar(items, opts){
   items.forEach(function(d,i){
     var y=i*(rowH+gap);
     var w = Math.max(1,(d.value||0)/maxV*(chartW-8));
-    svg.push('<text x="'+(labelW-8)+'" y="'+(y+rowH/2+4)+'" text-anchor="end" font-size="12">'+esc(truncateToWidth(d.label,labelW-14))+'</text>');
-    svg.push('<rect x="'+labelW+'" y="'+(y+3)+'" width="'+w+'" height="'+(rowH-6)+'" rx="3" fill="'+color+'" data-i="'+i+'"></rect>');
-    svg.push('<text x="'+(labelW+w+6)+'" y="'+(y+rowH/2+4)+'" font-size="11" fill="var(--text-secondary)">'+fmt(d.value)+'</text>');
+    var isHl = i<hlN;
+    svg.push('<text x="'+(labelW-8)+'" y="'+(y+rowH/2+4)+'" text-anchor="end" font-size="12" font-weight="'+(isHl?'700':'400')+'">'+esc(truncateToWidth(d.label,labelW-14))+'</text>');
+    svg.push('<rect class="'+(isHl?'bar-hl':'')+'" style="'+(isHl?'--glow-color:'+hlColor:'')+'" x="'+labelW+'" y="'+(y+3)+'" width="'+w+'" height="'+(rowH-6)+'" rx="3" fill="'+(isHl?hlColor:color)+'" data-i="'+i+'"></rect>');
+    svg.push('<text x="'+(labelW+w+6)+'" y="'+(y+rowH/2+4)+'" font-size="11" fill="'+(isHl?hlColor:'var(--text-secondary)')+'" font-weight="'+(isHl?'700':'400')+'">'+fmt(d.value)+'</text>');
+    if(isHl){
+      svg.push('<text class="bar-badge" style="animation-delay:'+(i*0.15)+'s" x="'+(labelW-8)+'" y="'+(y-3)+'" text-anchor="end" font-size="9.5" font-weight="700" fill="'+hlColor+'">TOP '+(i+1)+'</text>');
+    }
   });
   svg.push('</svg>');
   var wrap=document.createElement('div'); wrap.className='chartbox'; wrap.innerHTML=svg.join('');
   wrap.querySelectorAll('rect').forEach(function(r){
     r.addEventListener('mousemove', function(e){
       var i=+r.getAttribute('data-i'); var d=items[i];
-      showTip('<b>'+esc(d.label)+'</b><br>'+fmt(d.value), e);
+      showTip('<b>'+esc(d.label)+'</b><br>'+fmt(d.value)+(i<hlN?'<br><span style="color:'+hlColor+'">TOP '+(i+1)+'</span>':''), e);
+    });
+    r.addEventListener('mouseleave', hideTip);
+  });
+  return wrap;
+}
+
+// horizontal bar chart for ratio/share values (0-1) with a vertical cutoff reference line;
+// bars beyond the cutoff are highlighted with a pulsing glow, used for "setores acima da média do distrital".
+function shareBar(items, opts){
+  opts = opts||{};
+  var cutoff = opts.cutoff;
+  var cutoffLabel = opts.cutoffLabel || 'Distrital';
+  var hlColor = opts.highlightColor || 'var(--s3)';
+  var baseColor = opts.color || 'var(--s1)';
+  var rowH=26, gap=7, labelW=opts.labelW||150, chartW=380;
+  var maxV = Math.max(cutoff||0, ...items.map(function(d){return d.value||0;})) * 1.15 || 1;
+  var h = items.length*(rowH+gap);
+  var svgW = labelW+chartW+90;
+  var svg = ['<svg class="chart" viewBox="0 0 '+svgW+' '+(h+26)+'" width="100%" style="max-width:'+svgW+'px" height="'+(h+26)+'">'];
+  items.forEach(function(d,i){
+    var y=i*(rowH+gap);
+    var w = Math.max(1,(d.value||0)/maxV*(chartW-8));
+    var above = cutoff!=null && d.value>cutoff;
+    svg.push('<text x="'+(labelW-8)+'" y="'+(y+rowH/2+4)+'" text-anchor="end" font-size="12" font-weight="'+(above?'700':'400')+'">'+esc(truncateToWidth(d.label,labelW-14))+'</text>');
+    svg.push('<rect class="'+(above?'bar-hl':'')+'" style="'+(above?'--glow-color:'+hlColor:'')+'" x="'+labelW+'" y="'+(y+3)+'" width="'+w+'" height="'+(rowH-6)+'" rx="3" fill="'+(above?hlColor:baseColor)+'" data-i="'+i+'"></rect>');
+    svg.push('<text x="'+(labelW+w+6)+'" y="'+(y+rowH/2+4)+'" font-size="11" fill="'+(above?hlColor:'var(--text-secondary)')+'" font-weight="'+(above?'700':'400')+'">'+fmtPct(d.value)+(above?' ▲':'')+'</text>');
+  });
+  if(cutoff!=null){
+    var cx = labelW + (cutoff/maxV)*(chartW-8);
+    svg.push('<line class="cutoff-line" x1="'+cx+'" y1="-4" x2="'+cx+'" y2="'+(h+6)+'" stroke="var(--text-primary)" stroke-width="1.5" stroke-dasharray="4,3"></line>');
+    svg.push('<text class="cutoff-line" x="'+cx+'" y="'+(h+20)+'" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--text-primary)">'+esc(cutoffLabel)+': '+fmtPct(cutoff)+'</text>');
+  }
+  svg.push('</svg>');
+  var wrap=document.createElement('div'); wrap.className='chartbox'; wrap.innerHTML=svg.join('');
+  wrap.querySelectorAll('rect').forEach(function(r){
+    r.addEventListener('mousemove', function(e){
+      var i=+r.getAttribute('data-i'); var d=items[i];
+      var above = cutoff!=null && d.value>cutoff;
+      showTip('<b>'+esc(d.label)+'</b><br>'+fmtPct(d.value)+(above?'<br><span style="color:'+hlColor+'">acima do Distrital ('+fmtPct(cutoff)+')</span>':''), e);
     });
     r.addEventListener('mouseleave', hideTip);
   });
@@ -1399,12 +1455,26 @@ var TABS = [
   {id:'metodologia', label:'Metodologia', build:buildMetodologia},
 ];
 
+// Lazy tab rendering: building all 9 tabs' full DOM (tables with hundreds of rows,
+// SVG charts, the 233k-row pivot in Audit Pré-Visita) up front made first load slow
+// enough to hang on weaker devices/browsers. Now only the active tab is (re)built;
+// switching to a not-yet-built (or filter-staled) tab builds it on demand.
+var activeTabId = null;
+var builtTabs = {};
+
+function buildTab(id){
+  var t = TABS.filter(function(x){return x.id===id;})[0];
+  if(t){ t.build(); builtTabs[id] = true; }
+}
+
 function rebuildActive(){
-  TABS.forEach(function(t){ t.build(); });
+  builtTabs = {};
+  buildTab(activeTabId);
 }
 
 function initTabs(){
   var nav = document.getElementById('tabs');
+  activeTabId = TABS[0].id;
   TABS.forEach(function(t,i){
     var b = document.createElement('button');
     b.textContent = t.label;
@@ -1415,6 +1485,8 @@ function initTabs(){
       b.classList.add('active');
       document.querySelectorAll('section.panel').forEach(function(p){p.classList.remove('active');});
       document.getElementById('panel-'+t.id).classList.add('active');
+      activeTabId = t.id;
+      if(!builtTabs[t.id]) buildTab(t.id);
     });
     nav.appendChild(b);
   });
