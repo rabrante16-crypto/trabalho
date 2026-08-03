@@ -326,7 +326,8 @@ function buildTable(opts){
     var capped = opts.cap ? visRows.slice(0, opts.cap) : visRows;
     var html = '<div class="tbl-wrap"><table class="dtable"><thead><tr>';
     opts.columns.forEach(function(c){
-      html += '<th data-k="'+c.key+'" class="'+(sortKey===c.key?'sorted':'')+'">'+esc(c.label)+(sortKey===c.key?(sortDesc?' ▼':' ▲'):'')+'</th>';
+      var alignStyle = c.headAlign ? ' style="text-align:'+c.headAlign+'"' : '';
+      html += '<th data-k="'+c.key+'" class="'+(sortKey===c.key?'sorted':'')+'"'+alignStyle+'>'+esc(c.label)+(sortKey===c.key?(sortDesc?' ▼':' ▲'):'')+'</th>';
     });
     html += '</tr></thead><tbody>';
     capped.forEach(function(row, idx){
@@ -578,7 +579,7 @@ function physicianMiniTable(rows, opts){
   var countNote = rows.length+' médico(s) (ordenados por '+(opts.sortLabel||'volume')+'; role a lista para ver todos):';
   var html = '<div style="font-size:11.5px;color:var(--text-secondary);margin-bottom:4px">'+countNote+'</div>'+
     '<div class="tbl-wrap" style="max-height:340px;overflow-y:auto"><table class="dtable mini"><thead><tr>'+
-    '<th>Médico</th>'+(showEsp?'<th>Especialidade</th>':'')+(showSetor?'<th>Setor</th>':'')+'<th>CAD</th>'+
+    '<th>Médico</th>'+(showEsp?'<th style="text-align:left">Especialidade</th>':'')+(showSetor?'<th style="text-align:left">Setor</th>':'')+'<th style="text-align:left">CAD</th>'+
     '<th>TT Ant</th><th>TT Atual</th><th>EUF Ant</th><th>EUF Atual</th><th>Increm EUF</th>'+
     '</tr></thead><tbody>';
   rows.forEach(function(p){
@@ -601,7 +602,7 @@ function productMiniTable(rows){
   }
   var html = '<div style="font-size:11.5px;color:var(--text-secondary);margin-bottom:4px">'+rows.length+' produto(s) prescrito(s) por este médico:</div>'+
     '<div class="tbl-wrap" style="max-height:340px;overflow-y:auto"><table class="dtable mini"><thead><tr>'+
-    '<th>Mercado</th><th>Produto</th><th>TT Ant</th><th>TT Atual</th><th>EUF Ant</th><th>EUF Atual</th><th>Increm Mercado</th>'+
+    '<th>Mercado</th><th style="text-align:left">Produto</th><th>TT Ant</th><th>TT Atual</th><th>EUF Ant</th><th>EUF Atual</th><th>Increm Mercado</th>'+
     '</tr></thead><tbody>';
   rows.forEach(function(p){
     html += '<tr>'+
@@ -1327,7 +1328,7 @@ function buildInsights(){
       {key:'produto', label:'Marca', fmt:function(v){return esc(v);}},
       {key:'evol_euf', label:'Evol EUF', fmt:function(v){return v==null?'-':'<span class="'+signClass(v)+'">'+fmtPct(v)+'</span>';}},
       {key:'incr_euf', label:'Increm EUF', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtSignedInt(v)+'</span>';}},
-      {key:'acao', label:'Ação sugerida', fmt:function(v){return '<span style="white-space:normal;display:block;max-width:260px;text-align:left">'+esc(v)+'</span>';}},
+      {key:'acao', label:'Ação sugerida', headAlign:'left', fmt:function(v){return '<span style="white-space:normal;display:block;max-width:260px;text-align:left">'+esc(v)+'</span>';}},
     ],
     rows: marcasPrioritarias.map(function(m){ return Object.assign({}, m, {acao: actionForMarcaAudit(m.evol_euf, totEufAtual?m.euf_atual/totEufAtual:null)}); }),
     defaultSortKey:'incr_euf', defaultSortDesc:false
@@ -1341,7 +1342,7 @@ function buildInsights(){
       {key:'produto', label:'Marca', fmt:function(v){return esc(v);}},
       {key:'evol_euf', label:'Evol EUF', fmt:function(v){return v==null?'-':'<span class="'+signClass(v)+'">'+fmtPct(v)+'</span>';}},
       {key:'incr_euf', label:'Increm EUF', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtSignedInt(v)+'</span>';}},
-      {key:'acao', label:'Ação sugerida', fmt:function(v){return '<span style="white-space:normal;display:block;max-width:260px;text-align:left">'+esc(v)+'</span>';}},
+      {key:'acao', label:'Ação sugerida', headAlign:'left', fmt:function(v){return '<span style="white-space:normal;display:block;max-width:260px;text-align:left">'+esc(v)+'</span>';}},
     ],
     rows: marcasDestaque.map(function(m){ return Object.assign({}, m, {acao: actionForMarcaAudit(m.evol_euf, totEufAtual?m.euf_atual/totEufAtual:null)}); }),
     defaultSortKey:'incr_euf'
