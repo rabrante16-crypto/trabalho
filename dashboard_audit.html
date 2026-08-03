@@ -466,24 +466,34 @@ function physiciansIn(attr, keyLabel, setorFilterIdx, limit){
 }
 
 // physicians who prescribe a given Produto (EUF brand or competitor), optionally filtered to a Setor
+// NOTE: a Produto can appear under more than one Mercado sub-form for the same physician
+// (e.g. comprimido vs suspensão) as separate BASE AUDIT rows -- these must be summed per CRM,
+// not listed as separate lines, or a physician's total will be split/wrong in the drill-down.
 function physiciansForProduto(produtoIdx, setorFilterIdx){
   var rows = PRESCRICOES_BY_PRODUTO[produtoIdx] || [];
-  var out = [];
+  var map = {};
   rows.forEach(function(p){
     var crmIdx = p[PRE.CRM];
     var phy = DATA.physicians[crmIdx];
     if(setorFilterIdx!=null && phy[PHY.SETOR]!==setorFilterIdx) return;
-    out.push(physicianRow(crmIdx, makeAgg(p[PRE.TT_ANT],p[PRE.TT_ATUAL],p[PRE.EUF_ANT],p[PRE.EUF_ATUAL])));
+    var e = map[crmIdx]; if(!e){ e=[0,0,0,0]; map[crmIdx]=e; }
+    e[0]+=p[PRE.TT_ANT]; e[1]+=p[PRE.TT_ATUAL]; e[2]+=p[PRE.EUF_ANT]; e[3]+=p[PRE.EUF_ATUAL];
+  });
+  var out=[];
+  Object.keys(map).forEach(function(k){
+    var crmIdx=+k, v=map[k];
+    out.push(physicianRow(crmIdx, makeAgg(v[0],v[1],v[2],v[3])));
   });
   out.sort(function(a,b){return a.euf_incr-b.euf_incr;});
   return out;
 }
 
 // same as physiciansForProduto, but honoring every slicer of the DEIXARAM DE PRESCREVER pivot at once
+// (also aggregates multiple Mercado sub-form rows per CRM into a single physician total -- see note above)
 function physiciansForProdutoFiltered(produtoIdx, setorIdx, mercadoIdx, cadIdx, espIdx, crmQuery){
   var rows = PRESCRICOES_BY_PRODUTO[produtoIdx] || [];
-  var out = [];
   var cq = crmQuery ? crmQuery.toLowerCase() : '';
+  var map = {};
   rows.forEach(function(p){
     if(mercadoIdx!=null && p[PRE.MERCADO]!==mercadoIdx) return;
     var crmIdx = p[PRE.CRM];
@@ -492,7 +502,13 @@ function physiciansForProdutoFiltered(produtoIdx, setorIdx, mercadoIdx, cadIdx, 
     if(cadIdx!=null && phy[PHY.CAD]!==cadIdx) return;
     if(espIdx!=null && phy[PHY.ESP]!==espIdx) return;
     if(cq && String(DATA.crm_list[crmIdx]).toLowerCase().indexOf(cq)===-1) return;
-    out.push(physicianRow(crmIdx, makeAgg(p[PRE.TT_ANT],p[PRE.TT_ATUAL],p[PRE.EUF_ANT],p[PRE.EUF_ATUAL])));
+    var e = map[crmIdx]; if(!e){ e=[0,0,0,0]; map[crmIdx]=e; }
+    e[0]+=p[PRE.TT_ANT]; e[1]+=p[PRE.TT_ATUAL]; e[2]+=p[PRE.EUF_ANT]; e[3]+=p[PRE.EUF_ATUAL];
+  });
+  var out=[];
+  Object.keys(map).forEach(function(k){
+    var crmIdx=+k, v=map[k];
+    out.push(physicianRow(crmIdx, makeAgg(v[0],v[1],v[2],v[3])));
   });
   out.sort(function(a,b){return a.euf_incr-b.euf_incr;});
   return out;
