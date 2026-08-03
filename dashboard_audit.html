@@ -131,6 +131,7 @@
 </header>
 <div class="wrap">
   <section class="panel" id="panel-audit"></section>
+  <section class="panel" id="panel-deixaram"></section>
   <section class="panel" id="panel-visao"></section>
   <section class="panel" id="panel-esp"></section>
   <section class="panel" id="panel-marcas"></section>
@@ -478,6 +479,46 @@ function physiciansForProduto(produtoIdx, setorFilterIdx){
   return out;
 }
 
+// same as physiciansForProduto, but honoring every slicer of the DEIXARAM DE PRESCREVER pivot at once
+function physiciansForProdutoFiltered(produtoIdx, setorIdx, mercadoIdx, cadIdx, espIdx, crmQuery){
+  var rows = PRESCRICOES_BY_PRODUTO[produtoIdx] || [];
+  var out = [];
+  var cq = crmQuery ? crmQuery.toLowerCase() : '';
+  rows.forEach(function(p){
+    if(mercadoIdx!=null && p[PRE.MERCADO]!==mercadoIdx) return;
+    var crmIdx = p[PRE.CRM];
+    var phy = DATA.physicians[crmIdx];
+    if(setorIdx!=null && phy[PHY.SETOR]!==setorIdx) return;
+    if(cadIdx!=null && phy[PHY.CAD]!==cadIdx) return;
+    if(espIdx!=null && phy[PHY.ESP]!==espIdx) return;
+    if(cq && String(DATA.crm_list[crmIdx]).toLowerCase().indexOf(cq)===-1) return;
+    out.push(physicianRow(crmIdx, makeAgg(p[PRE.TT_ANT],p[PRE.TT_ATUAL],p[PRE.EUF_ANT],p[PRE.EUF_ATUAL])));
+  });
+  out.sort(function(a,b){return a.euf_incr-b.euf_incr;});
+  return out;
+}
+
+// leaner mini-table matching the literal DEIXARAM DE PRESCREVER pivot columns (no ESP/Setor/CAD/TT)
+function deixMedicoMiniTable(rows){
+  if(!rows || !rows.length){
+    return '<div style="padding:4px 0;color:var(--text-secondary);font-size:12px">Nenhum médico encontrado para este recorte.</div>';
+  }
+  var html = '<div style="font-size:11.5px;color:var(--text-secondary);margin-bottom:4px">'+rows.length+' médico(s) (ordenados por maior queda de EUF; role a lista para ver todos):</div>'+
+    '<div class="tbl-wrap" style="max-height:340px;overflow-y:auto"><table class="dtable mini"><thead><tr>'+
+    '<th>Médico</th><th>EUF Ant</th><th>EUF Atual</th><th>Increm EUF</th><th>Evol EUF</th>'+
+    '</tr></thead><tbody>';
+  rows.forEach(function(p){
+    html += '<tr>'+
+      '<td style="text-align:left">'+esc(p.medico)+'</td>'+
+      '<td>'+fmtInt(p.euf_ant)+'</td><td>'+fmtInt(p.euf_atual)+'</td>'+
+      '<td><span class="'+signClass(p.euf_incr)+'">'+fmtSignedInt(p.euf_incr)+'</span></td>'+
+      '<td>'+(p.euf_evol==null?'-':'<span class="'+signClass(p.euf_evol)+'">'+fmtPct(p.euf_evol)+'</span>')+'</td>'+
+      '</tr>';
+  });
+  html += '</tbody></table></div>';
+  return html;
+}
+
 // physicians matching an optional Mercado / Produto filter, aggregated across their matching rows
 function physiciansFiltered(setorFilterIdx, mercadoIdx, produtoIdx){
   var map = {};
@@ -739,6 +780,110 @@ function buildAuditPrevisita(){
   espSel.addEventListener('change', render);
   mercadoSel.addEventListener('change', render);
   cadSel.addEventListener('change', render);
+  render();
+}
+
+// ================= build: Deixaram de Prescrever (réplica fiel da pivot original) =================
+function buildDeixaramPrescrever(){
+  var el = document.getElementById('panel-deixaram');
+  el.innerHTML = '<h2 class="h">Deixaram de Prescrever'+filterNote()+'</h2>'+
+    '<p class="desc">Réplica fiel da tabela dinâmica da aba <b>DEIXARAM DE PRESCREVER</b>: marcas Eurofarma (linhas) e os médicos que mais reduziram ou pararam de prescrevê-las (expansão). Filtre por Setor, CRM, Mercado, CAD e/ou Especialidade para refinar a auditoria.</p>'+
+    '<div class="searchbar" style="margin-bottom:14px">'+
+    '<label style="font-size:12.5px;color:var(--text-secondary)">Setor: <select id="deixSetor"><option value="Todos">Todos</option></select></label>'+
+    '<label style="font-size:12.5px;color:var(--text-secondary)">CRM: <input type="search" id="deixCrm" placeholder="Buscar por CRM..." style="min-width:120px"></label>'+
+    '<label style="font-size:12.5px;color:var(--text-secondary)">Mercado: <select id="deixMercado"><option value="">Todos</option></select></label>'+
+    '<label style="font-size:12.5px;color:var(--text-secondary)">CAD: <select id="deixCad"><option value="">Todos</option></select></label>'+
+    '<label style="font-size:12.5px;color:var(--text-secondary)">ESP: <select id="deixEsp"><option value="">Todas</option></select></label>'+
+    '</div>'+
+    '<div id="deixBody"></div>';
+
+  var setorSel = el.querySelector('#deixSetor');
+  var crmInp = el.querySelector('#deixCrm');
+  var mercadoSel = el.querySelector('#deixMercado');
+  var cadSel = el.querySelector('#deixCad');
+  var espSel = el.querySelector('#deixEsp');
+
+  DATA.setores.forEach(function(s){
+    var o = document.createElement('option'); o.value=s.setor; o.textContent=niceName(s.setor); setorSel.appendChild(o);
+  });
+  setorSel.value = currentSetor;
+  DATA.dims.Mercado.slice().map(function(m,i){return {m:m,i:i};}).sort(function(a,b){return cleanMercado(a.m).localeCompare(cleanMercado(b.m));}).forEach(function(o){
+    var opt=document.createElement('option'); opt.value=o.i; opt.textContent=cleanMercado(o.m); mercadoSel.appendChild(opt);
+  });
+  DATA.dims.CAD.forEach(function(c,i){
+    var opt=document.createElement('option'); opt.value=i; opt.textContent=c; cadSel.appendChild(opt);
+  });
+  DATA.dims.ESP.slice().map(function(e,i){return {e:e,i:i};}).sort(function(a,b){return a.e.localeCompare(b.e);}).forEach(function(o){
+    var opt=document.createElement('option'); opt.value=o.i; opt.textContent=o.e; espSel.appendChild(opt);
+  });
+
+  var debounceTimer = null;
+  function scheduleRender(){ clearTimeout(debounceTimer); debounceTimer = setTimeout(render, 150); }
+
+  function render(){
+    var setorIdx = setorIdxOf(currentSetor);
+    var mercadoIdx = mercadoSel.value===''?null:+mercadoSel.value;
+    var cadIdx = cadSel.value===''?null:+cadSel.value;
+    var espIdx = espSel.value===''?null:+espSel.value;
+    var crmQuery = crmInp.value.trim();
+    var anyLocalFilter = mercadoIdx!=null || cadIdx!=null || espIdx!=null || !!crmQuery;
+
+    var marcas;
+    if(setorIdx==null && !anyLocalFilter){
+      marcas = DATA.marcas.map(function(m){ return Object.assign({}, m, {_produtoIdx: DATA.dims.Produto.indexOf(m.produto)}); });
+    } else {
+      marcas = DATA.marcas.map(function(m){
+        var produtoIdx = DATA.dims.Produto.indexOf(m.produto);
+        var rows = physiciansForProdutoFiltered(produtoIdx, setorIdx, mercadoIdx, cadIdx, espIdx, crmQuery);
+        var euf_ant=0, euf_atual=0;
+        rows.forEach(function(r){ euf_ant+=r.euf_ant; euf_atual+=r.euf_atual; });
+        return { produto:m.produto, euf_ant:euf_ant, euf_atual:euf_atual, incr_euf: round2(euf_atual-euf_ant), evol_euf: euf_ant?(euf_atual-euf_ant)/euf_ant:null, _produtoIdx: produtoIdx };
+      });
+    }
+
+    var body = el.querySelector('#deixBody');
+    body.innerHTML = '';
+
+    var totEufAnt = marcas.reduce(function(s,m){return s+m.euf_ant;},0);
+    var totEufAtual = marcas.reduce(function(s,m){return s+m.euf_atual;},0);
+
+    var kpiWrap = document.createElement('div'); kpiWrap.className='grid-kpi';
+    function tile(label,value){ var d=document.createElement('div'); d.className='tile'; d.innerHTML='<div class="label">'+label+'</div><div class="value">'+value+'</div>'; return d; }
+    kpiWrap.appendChild(tile('Marcas no recorte', fmtInt(marcas.length)));
+    kpiWrap.appendChild(tile('EUF Atual (total)', fmtInt(totEufAtual)));
+    kpiWrap.appendChild(tile('Increm EUF (total)', fmtSignedInt(totEufAtual-totEufAnt)));
+    body.appendChild(kpiWrap);
+
+    var card = document.createElement('div'); card.className='card';
+    card.innerHTML = '<h2 class="h" style="margin-top:0">Marcas &mdash; quem deixou de prescrever</h2><p class="desc">Clique na seta para ver quais médicos mais reduziram ou pararam de prescrever a marca.</p>';
+    var rowsWithChildren = marcas.map(function(m){
+      return Object.assign({}, m, {medicos: physiciansForProdutoFiltered(m._produtoIdx, setorIdx, mercadoIdx, cadIdx, espIdx, crmQuery)});
+    });
+    card.appendChild(buildTable({
+      columns:[
+        {key:'produto', label:'Marca', fmt:function(v){return esc(v);}},
+        {key:'euf_ant', label:'EUF Ant', fmt:fmtInt},
+        {key:'euf_atual', label:'EUF Atual', fmt:fmtInt},
+        {key:'incr_euf', label:'Increm EUF', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtSignedInt(v)+'</span>';}},
+        {key:'evol_euf', label:'Evol EUF', fmt:function(v){return v==null?'-':'<span class="'+signClass(v)+'">'+fmtPct(v)+'</span>';}},
+      ],
+      rows: rowsWithChildren, childKey:'medicos', childRenderer: deixMedicoMiniTable,
+      searchable:true, defaultSortKey:'incr_euf', defaultSortDesc:false,
+      totalRow: { produto:'Total Geral', euf_ant: totEufAnt, euf_atual: totEufAtual, incr_euf: totEufAtual-totEufAnt, evol_euf: totEufAnt?(totEufAtual-totEufAnt)/totEufAnt:null }
+    }));
+    body.appendChild(card);
+  }
+
+  setorSel.addEventListener('change', function(){
+    currentSetor = setorSel.value;
+    var headerSel = document.getElementById('setorFilter');
+    if(headerSel) headerSel.value = currentSetor;
+    rebuildActive();
+  });
+  crmInp.addEventListener('input', scheduleRender);
+  mercadoSel.addEventListener('change', render);
+  cadSel.addEventListener('change', render);
+  espSel.addEventListener('change', render);
   render();
 }
 
@@ -1194,6 +1339,7 @@ function buildMetodologia(){
     '<div class="note"><b>O que é este arquivo:</b> diferente do dashboard de vendas (MDTR), esta base rastreia <b>prescrições médicas</b> (não vendas em farmácia). Cada linha da BASE AUDIT é uma combinação Médico × Produto, com o volume total do mercado (TT, incluindo concorrentes) e o volume específico das marcas Eurofarma (EUF) naquele mercado terapêutico.</div>'+
     '<div class="note"><b>Período:</b> as colunas da planilha original usam apenas os rótulos genéricos "ANT" (anterior) e "ATUAL" (atual), sem indicar o mês exato. Pelo nome do arquivo e pela aba oculta de referência (que indicava "Julho/25" como base de um ciclo anterior), o padrão é uma comparação do mesmo mês no ano anterior; a base atual está identificada como "Junho/26". Diferentemente do dashboard MDTR, não há indicação de mês parcial ou necessidade de projeção nesta base.</div>'+
     '<div class="note"><b>Aba Audit Pré-Visita:</b> réplica fiel da tabela dinâmica original (Setor &rarr; Produto), recalculada em tempo real a partir da BASE AUDIT. Os filtros de Médico e CRM funcionam como busca (aceitam texto parcial); ESP, Mercado e CAD funcionam como os slicers da planilha original.</div>'+
+    '<div class="note"><b>Aba Deixaram de Prescrever:</b> réplica fiel da tabela dinâmica original (Marca &rarr; Médico), recalculada em tempo real a partir da BASE AUDIT. Os filtros de Setor, CRM, Mercado, CAD e ESP funcionam como os slicers da planilha original.</div>'+
     '<div class="note"><b>Filtro de Setor:</b> o seletor no topo recalcula todas as abas a partir dos dados médico-a-médico da BASE AUDIT.</div>'+
     '<div class="note"><b>Expansões (drill-down):</b> em cada tabela, a seta abre uma lista dos médicos (ou produtos, na aba Maiores Prescritores) que compõem aquele total, recalculada diretamente da base linha a linha &mdash; e não apenas os grupos que estavam expandidos na planilha Excel original.</div>'+
     '<div class="note"><b>Aba Maiores Prescritores:</b> combina as abas MAIORES PRESC POR PRODUTO e MAIORES PRESCRITORES MERCADO da planilha original em uma única ferramenta de busca, com os mesmos filtros de Mercado e Produto sugeridos pelas instruções da planilha original.</div>'+
@@ -1206,6 +1352,7 @@ function buildMetodologia(){
 // ================= tabs / nav =================
 var TABS = [
   {id:'audit', label:'Audit Pré-Visita', build:buildAuditPrevisita},
+  {id:'deixaram', label:'Deixaram de Prescrever', build:buildDeixaramPrescrever},
   {id:'visao', label:'Visão Geral', build:buildVisaoGeral},
   {id:'esp', label:'Ranking Especialidade', build:buildEspecialidade},
   {id:'marcas', label:'Marcas EUF', build:buildMarcas},
