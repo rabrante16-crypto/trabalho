@@ -535,12 +535,14 @@ function deixMedicoMiniTable(rows){
   return html;
 }
 
-// physicians matching an optional Mercado / Produto filter, aggregated across their matching rows
-function physiciansFiltered(setorFilterIdx, mercadoIdx, produtoIdx){
+// physicians matching an optional Mercado / Produto filter, aggregated across their matching rows.
+// mercadoSet / produtoSet are Sets of dim indices (text-search can match more than one entry), or null for "todos".
+function physiciansFiltered(setorFilterIdx, mercadoSet, produtoSet){
   var map = {};
-  var source = produtoIdx!=null ? (PRESCRICOES_BY_PRODUTO[produtoIdx]||[]) : DATA.prescricoes;
+  var source = (produtoSet && produtoSet.size===1) ? (PRESCRICOES_BY_PRODUTO[produtoSet.values().next().value]||[]) : DATA.prescricoes;
   source.forEach(function(p){
-    if(mercadoIdx!=null && p[PRE.MERCADO]!==mercadoIdx) return;
+    if(produtoSet && !produtoSet.has(p[PRE.PRODUTO])) return;
+    if(mercadoSet && !mercadoSet.has(p[PRE.MERCADO])) return;
     var crmIdx = p[PRE.CRM];
     var phy = DATA.physicians[crmIdx];
     if(setorFilterIdx!=null && phy[PHY.SETOR]!==setorFilterIdx) return;
@@ -1075,40 +1077,52 @@ function buildPrescritores(){
   var setorIdx = setorIdxOf(currentSetor);
 
   el.innerHTML = '<h2 class="h">Maiores Prescritores'+filterNote()+'</h2>'+
-    '<p class="desc">Ranking de médicos por volume de prescrição. Filtre por Mercado e/ou Produto para identificar os maiores prescritores de um concorrente específico. Fonte: abas <b>MAIORES PRESC POR PRODUTO</b> e <b>MAIORES PRESCRITORES MERCADO</b>.</p>'+
+    '<p class="desc">Ranking de médicos por volume de prescrição. Busque por Produto (SKU) e/ou Mercado para identificar os maiores prescritores de um concorrente específico. Fonte: abas <b>MAIORES PRESC POR PRODUTO</b> e <b>MAIORES PRESCRITORES MERCADO</b>.</p>'+
     '<div class="searchbar" style="margin-bottom:14px">'+
-    '<label style="font-size:12.5px;color:var(--text-secondary)">Mercado: <select id="mercadoFilter"><option value="">Todos</option></select></label>'+
-    '<label style="font-size:12.5px;color:var(--text-secondary)">Produto: <select id="produtoFilter"><option value="">Todos</option></select></label>'+
+    '<label style="font-size:12.5px;color:var(--text-secondary)">Produto (SKU): <input type="search" id="produtoSearch" placeholder="Buscar produto..." style="min-width:220px"></label>'+
+    '<label style="font-size:12.5px;color:var(--text-secondary)">Mercado: <input type="search" id="mercadoSearch" placeholder="Buscar mercado..." style="min-width:200px"></label>'+
     '</div>'+
     '<div id="prescritoresBody"></div>';
 
-  var mercadoSel = el.querySelector('#mercadoFilter');
-  var produtoSel = el.querySelector('#produtoFilter');
-  DATA.dims.Mercado.slice().map(function(m,i){return {m:m,i:i};}).sort(function(a,b){return cleanMercado(a.m).localeCompare(cleanMercado(b.m));}).forEach(function(o){
-    var opt = document.createElement('option'); opt.value=o.i; opt.textContent=cleanMercado(o.m); mercadoSel.appendChild(opt);
-  });
-  function populateProdutoOptions(mercadoIdx){
-    produtoSel.innerHTML = '<option value="">Todos</option>';
-    var produtoIdxs;
-    if(mercadoIdx==null){
-      produtoIdxs = DATA.dims.Produto.map(function(_,i){return i;});
-    } else {
-      var set = {};
-      (DATA.prescricoes).forEach(function(p){ if(p[PRE.MERCADO]===mercadoIdx) set[p[PRE.PRODUTO]]=true; });
-      produtoIdxs = Object.keys(set).map(Number);
-    }
-    produtoIdxs.map(function(i){return {p:DATA.dims.Produto[i], i:i};}).sort(function(a,b){return a.p.localeCompare(b.p);}).forEach(function(o){
-      var opt = document.createElement('option'); opt.value=o.i; opt.textContent=o.p; produtoSel.appendChild(opt);
-    });
-  }
-  populateProdutoOptions(null);
+  var produtoInp = el.querySelector('#produtoSearch');
+  var mercadoInp = el.querySelector('#mercadoSearch');
+
+  var debounceTimer = null;
+  function scheduleRender(){ clearTimeout(debounceTimer); debounceTimer = setTimeout(render, 150); }
 
   function render(){
-    var mercadoIdx = mercadoSel.value===''? null : +mercadoSel.value;
-    var produtoIdx = produtoSel.value===''? null : +produtoSel.value;
-    var rows = physiciansFiltered(setorIdx, mercadoIdx, produtoIdx);
+    var produtoQuery = produtoInp.value.trim().toLowerCase();
+    var mercadoQuery = mercadoInp.value.trim().toLowerCase();
+
+    var produtoSet = null;
+    if(produtoQuery){
+      produtoSet = new Set();
+      DATA.dims.Produto.forEach(function(p,i){ if(p.toLowerCase().indexOf(produtoQuery)>-1) produtoSet.add(i); });
+    }
+    var mercadoSet = null;
+    if(mercadoQuery){
+      mercadoSet = new Set();
+      DATA.dims.Mercado.forEach(function(m,i){ if(cleanMercado(m).toLowerCase().indexOf(mercadoQuery)>-1) mercadoSet.add(i); });
+    }
+
     var body = el.querySelector('#prescritoresBody');
     body.innerHTML = '';
+
+    if((produtoSet && produtoSet.size===0) || (mercadoSet && mercadoSet.size===0)){
+      body.innerHTML = '<div class="note">Nenhum produto/mercado encontrado para a busca informada.</div>';
+      return;
+    }
+
+    var rows = physiciansFiltered(setorIdx, mercadoSet, produtoSet);
+
+    if((produtoSet && produtoSet.size<=8) || (mercadoSet && mercadoSet.size<=8)){
+      var noteParts = [];
+      if(produtoSet && produtoSet.size<=8) noteParts.push('<b>Produto(s):</b> '+Array.from(produtoSet).map(function(i){return esc(DATA.dims.Produto[i]);}).join(', '));
+      if(mercadoSet && mercadoSet.size<=8) noteParts.push('<b>Mercado(s):</b> '+Array.from(mercadoSet).map(function(i){return esc(cleanMercado(DATA.dims.Mercado[i]));}).join(', '));
+      var note = document.createElement('div'); note.className='note'; note.style.marginBottom='12px';
+      note.innerHTML = noteParts.join('<br>');
+      body.appendChild(note);
+    }
 
     var kpiWrap = document.createElement('div'); kpiWrap.className='grid-kpi';
     var ttSum=0, eufSum=0; rows.forEach(function(r){ttSum+=r.tt_atual; eufSum+=r.euf_atual;});
@@ -1146,11 +1160,8 @@ function buildPrescritores(){
     body.appendChild(card2);
   }
 
-  mercadoSel.addEventListener('change', function(){
-    populateProdutoOptions(mercadoSel.value===''?null:+mercadoSel.value);
-    render();
-  });
-  produtoSel.addEventListener('change', render);
+  produtoInp.addEventListener('input', scheduleRender);
+  mercadoInp.addEventListener('input', scheduleRender);
   render();
 }
 
