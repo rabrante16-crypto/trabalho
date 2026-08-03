@@ -86,6 +86,10 @@
   table.dtable tr.child td{color:var(--text-secondary);}
   table.dtable tr.child td:first-child{padding-left:24px;}
   table.dtable tr.total td{font-weight:700;border-top:2px solid var(--baseline);}
+  table.dtable tr.child-detail td{background:var(--surface-2);padding:8px 8px 12px 24px;white-space:normal;text-align:left;border-bottom:1px solid var(--baseline);}
+  table.dtable.mini{font-size:12px;}
+  table.dtable.mini th{font-size:10.5px;padding:5px 7px;position:sticky;top:0;background:var(--surface-2);}
+  table.dtable.mini td{padding:5px 7px;}
   .tbl-wrap{overflow-x:auto;}
   .pos{color:var(--good);} .neg{color:var(--bad);}
   .expand-btn{cursor:pointer;color:var(--s1);font-size:11px;margin-right:6px;display:inline-block;width:12px;}
@@ -344,15 +348,9 @@ function buildTable(opts){
       });
       html += '</tr>';
       if(hasChildren && expanded[rid]){
-        row[opts.childKey].forEach(function(child){
-          html += '<tr class="child">';
-          opts.columns.forEach(function(c,ci){
-            var v = child[c.key];
-            var content = c.fmt ? c.fmt(v,child) : esc(v);
-            html += '<td class="'+(c.cls?c.cls(v,child):'')+'">'+content+'</td>';
-          });
-          html += '</tr>';
-        });
+        html += '<tr class="child-detail"><td colspan="'+opts.columns.length+'">'+
+          (opts.childRenderer ? opts.childRenderer(row[opts.childKey], row) : '') +
+          '</td></tr>';
       }
     });
     if(opts.totalRow){
@@ -479,6 +477,59 @@ function setorOfBrick(brickName){
   return setorIdx!=null ? DATA.dims.Setor[setorIdx] : null;
 }
 
+// ================= PDV drill-down (which PDV/Brick/Bandeira make up an aggregate) =================
+function pdvBreakdown(filterFn, setorFilterIdx){
+  var map = {};
+  DATA.rows.forEach(function(row){
+    if(setorFilterIdx!=null && row[COL.Setor]!==setorFilterIdx) return;
+    if(!filterFn(row)) return;
+    var pdvIdx = row[COL.PDV];
+    var e = map[pdvIdx];
+    if(!e){ e = {u25:0,u26:0,r25:0,r26:0, brickIdx:row[COL.Brick], bandeiraIdx:row[COL.Bandeira], setorIdx:row[COL.Setor]}; map[pdvIdx]=e; }
+    e.u25+=row[COL_U25]; e.u26+=row[COL_U26]; e.r25+=row[COL_R25]; e.r26+=row[COL_R26];
+  });
+  var out=[];
+  Object.keys(map).forEach(function(k){
+    var e = map[k];
+    var agg = makeAgg(e.u25,e.u26,e.r25,e.r26);
+    agg.pdv = DATA.dims.PDV[k];
+    agg.brick = DATA.dims.Brick[e.brickIdx];
+    agg.bandeira = DATA.dims.Bandeira[e.bandeiraIdx];
+    agg.setor = DATA.dims.Setor[e.setorIdx];
+    out.push(agg);
+  });
+  return out.sort(function(a,b){return b.reais_proj-a.reais_proj;});
+}
+
+function pdvMiniTable(pdvRows, opts){
+  opts = opts||{};
+  if(!pdvRows || !pdvRows.length){
+    return '<div style="padding:4px 0;color:var(--text-secondary);font-size:12px">Nenhum PDV com venda encontrado para este recorte'+(opts.showSetor===false?'':' (dentro do setor selecionado, se houver filtro ativo)')+'.</div>';
+  }
+  var showSetor = opts.showSetor!==false && currentSetor==='Todos';
+  var showBrick = opts.showBrick!==false;
+  var showBandeira = opts.showBandeira!==false;
+  var shown = pdvRows;
+  var countNote = pdvRows.length+' PDV(s) compõem este total (ordenados por faturamento'+(pdvRows.length>10?'; role a lista para ver todos':'')+'):';
+  var html = '<div style="font-size:11.5px;color:var(--text-secondary);margin-bottom:4px">'+countNote+'</div>'+
+    '<div class="tbl-wrap" style="max-height:340px;overflow-y:auto"><table class="dtable mini"><thead><tr>'+
+    '<th>PDV</th>'+(showBrick?'<th>Brick</th>':'')+(showBandeira?'<th>Rede (Bandeira)</th>':'')+(showSetor?'<th>Setor</th>':'')+
+    '<th>'+DATA.file_info.periodo_anterior+' Unid</th><th>Proj Unid</th><th>Proj R$</th><th>Increm R$</th>'+
+    '</tr></thead><tbody>';
+  shown.forEach(function(p){
+    html += '<tr>'+
+      '<td style="text-align:left">'+esc(p.pdv)+'</td>'+
+      (showBrick?'<td style="text-align:left">'+esc(niceName(p.brick))+'</td>':'')+
+      (showBandeira?'<td style="text-align:left">'+esc(p.bandeira)+'</td>':'')+
+      (showSetor?'<td style="text-align:left">'+esc(niceName(p.setor))+'</td>':'')+
+      '<td>'+fmtInt(p.unid_jun25)+'</td><td>'+fmtInt(p.unid_proj)+'</td><td>'+fmtBRL(p.reais_proj)+'</td>'+
+      '<td><span class="'+signClass(p.reais_increm)+'">'+fmtSignedBRL(p.reais_increm)+'</span></td>'+
+      '</tr>';
+  });
+  html += '</tbody></table></div>';
+  return html;
+}
+
 // ================= app state =================
 var currentSetor = 'Todos';
 
@@ -584,16 +635,19 @@ function buildRankingMarcas(){
         unid_increm: m.unid_increm, unid_evol: m.unid_evol,
         reais_jun26: m.reais_jun26, reais_proj: m.reais_proj, reais_increm: m.reais_increm,
         reais_evol: m.reais_evol, repres: m.repres,
-        setores: m.setores
       };
     });
   } else {
     var setorTot = DATA.setores.find(function(s){return s.setor===currentSetor;});
     var totReaisProj = setorTot ? setorTot.reais_proj : 0;
     rows = aggregateBy('Marca', setorIdx).map(function(m){
-      return Object.assign({}, m, {marca:m.key, repres: totReaisProj ? m.reais_proj/totReaisProj : 0, setores:[]});
+      return Object.assign({}, m, {marca:m.key, repres: totReaisProj ? m.reais_proj/totReaisProj : 0});
     });
   }
+  rows.forEach(function(row){
+    var marcaIdx = DATA.dims.Marca.indexOf(row.marca);
+    row.pdvs = pdvBreakdown(function(r){ return r[COL.Marca]===marcaIdx; }, setorIdx);
+  });
 
   var card = document.createElement('div'); card.className='card';
   card.innerHTML = '<h2 class="h" style="margin-top:0">Top variações de unidades por marca</h2>';
@@ -610,7 +664,7 @@ function buildRankingMarcas(){
   el.appendChild(card);
 
   var card2 = document.createElement('div'); card2.className='card';
-  card2.innerHTML = '<h2 class="h" style="margin-top:0">Todas as marcas</h2><p class="desc">Clique na seta para abrir o detalhamento por setor (disponível apenas com "Todos os setores" selecionado). Clique em um cabeçalho para ordenar.</p>';
+  card2.innerHTML = '<h2 class="h" style="margin-top:0">Todas as marcas</h2><p class="desc">Clique na seta para ver quais PDVs (com Brick e Rede/Bandeira) compõem o total da marca. Clique em um cabeçalho para ordenar.</p>';
   var tbl = buildTable({
     columns:[
       {key:'marca', label:'Marca', fmt:function(v){return esc(niceName(v));}},
@@ -623,7 +677,7 @@ function buildRankingMarcas(){
       {key:'reais_increm', label:'Increm R$', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtSignedBRL(v)+'</span>';}},
       {key:'repres', label:'Repres %', fmt:fmtPct},
     ],
-    rows: rows, childKey:'setores', searchable:true, defaultSortKey:'unid_increm', defaultSortDesc:false,
+    rows: rows, childKey:'pdvs', childRenderer:pdvMiniTable, searchable:true, defaultSortKey:'unid_increm', defaultSortDesc:false,
     totalRow: setorIdx==null ? Object.assign({marca:'Total Geral'}, DATA.ranking_marcas_total) : Object.assign({marca:'Total do setor'}, DATA.setores.find(function(s){return s.setor===currentSetor;}))
   });
   card2.appendChild(tbl);
@@ -646,16 +700,19 @@ function buildRankingPdv(){
         unid_increm: m.unid_increm, unid_evol: m.unid_evol,
         reais_jun26: m.reais_jun26, reais_proj: m.reais_proj, reais_increm: m.reais_increm,
         reais_evol: m.reais_evol, repres: m.repres,
-        setores: m.setores
       };
     });
   } else {
     var setorTot = DATA.setores.find(function(s){return s.setor===currentSetor;});
     var totReaisProj = setorTot ? setorTot.reais_proj : 0;
     rows = aggregateBy('Bandeira', setorIdx).map(function(m){
-      return Object.assign({}, m, {bandeira:m.key, repres: totReaisProj ? m.reais_proj/totReaisProj : 0, setores:[]});
+      return Object.assign({}, m, {bandeira:m.key, repres: totReaisProj ? m.reais_proj/totReaisProj : 0});
     });
   }
+  rows.forEach(function(row){
+    var bandeiraIdx = DATA.dims.Bandeira.indexOf(row.bandeira);
+    row.pdvs = pdvBreakdown(function(r){ return r[COL.Bandeira]===bandeiraIdx; }, setorIdx);
+  });
 
   var card = document.createElement('div'); card.className='card';
   card.innerHTML = '<h2 class="h" style="margin-top:0">Top 12 redes por faturamento projetado ('+DATA.file_info.periodo_atual+')</h2>';
@@ -665,7 +722,7 @@ function buildRankingPdv(){
   el.appendChild(card);
 
   var card2 = document.createElement('div'); card2.className='card';
-  card2.innerHTML = '<h2 class="h" style="margin-top:0">Todas as redes</h2><p class="desc">Clique na seta para abrir o detalhamento por setor (quando disponível na aba de origem; e apenas com "Todos os setores" selecionado).</p>';
+  card2.innerHTML = '<h2 class="h" style="margin-top:0">Todas as redes</h2><p class="desc">Clique na seta para ver quais PDVs (lojas) dessa rede, e em qual Brick cada um está.</p>';
   var tbl = buildTable({
     columns:[
       {key:'bandeira', label:'Rede (Bandeira)', fmt:function(v){return esc(v);}},
@@ -677,7 +734,7 @@ function buildRankingPdv(){
       {key:'reais_increm', label:'Increm R$', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtSignedBRL(v)+'</span>';}},
       {key:'repres', label:'Repres %', fmt:fmtPct},
     ],
-    rows: rows, childKey:'setores', searchable:true, defaultSortKey:'reais_proj',
+    rows: rows, childKey:'pdvs', childRenderer:function(kids){return pdvMiniTable(kids, {showBandeira:false});}, searchable:true, defaultSortKey:'reais_proj',
     totalRow: setorIdx==null ? Object.assign({bandeira:'Total Geral'}, DATA.ranking_pdv_total) : Object.assign({bandeira:'Total do setor'}, DATA.setores.find(function(s){return s.setor===currentSetor;}))
   });
   card2.appendChild(tbl);
@@ -730,6 +787,11 @@ function buildBrick(){
   var combos = aggregateBy2('Brick','Marca', setorIdx).filter(function(x){ return x.unid_jun25>=5; });
   var decremento = combos.slice().sort(function(a,b){return a.unid_increm-b.unid_increm;}).slice(0,20);
   var crescimento = combos.slice().sort(function(a,b){return b.unid_increm-a.unid_increm;}).slice(0,20);
+  decremento.concat(crescimento).forEach(function(row){
+    var brickIdx = DATA.dims.Brick.indexOf(row.keyA);
+    var marcaIdx = DATA.dims.Marca.indexOf(row.keyB);
+    row.pdvs = pdvBreakdown(function(r){ return r[COL.Brick]===brickIdx && r[COL.Marca]===marcaIdx; }, setorIdx);
+  });
 
   el.innerHTML = '<div class="note"><b>Nota sobre esta aba:</b> '+esc(DATA.decremento_sheet_note)+' Os rankings abaixo foram <b>recalculados a partir dos dados linha a linha da aba BASE MDTR</b> (combinações Brick × Marca com pelo menos 5 unidades em '+DATA.file_info.periodo_anterior+'), para entregar de fato a análise "marcas em decremento por brick" sugerida pelo nome da aba original.</div>'+
     '<div class="note"><b>Sobre a comparação:</b> '+DATA.file_info.periodo_atual+' na base é um mês <b>parcial</b> (25 dias). O incremento/evolução abaixo compara a <b>projeção do mês cheio</b> (parcial × 31/25, mesma fórmula usada nas abas originais MDTR/RANKING) contra '+DATA.file_info.periodo_anterior+' (mês cheio), para ser uma comparação justa.</div>'+
@@ -746,15 +808,17 @@ function buildBrick(){
       {key:'reais_increm', label:'Increm R$', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtSignedBRL(v)+'</span>';}},
   ];
 
+  var pdvRenderer = function(kids){ return pdvMiniTable(kids, {showBrick:false}); };
+
   var card = document.createElement('div'); card.className='card';
-  card.innerHTML = '<h2 class="h" style="margin-top:0">Top 20 combinações em maior decremento projetado</h2>';
-  var tbl = buildTable({ columns: cols, rows: decremento, searchable:true, defaultSortKey:'unid_increm', defaultSortDesc:false });
+  card.innerHTML = '<h2 class="h" style="margin-top:0">Top 20 combinações em maior decremento projetado</h2><p class="desc">Clique na seta para ver quais PDVs desse brick venderam essa marca, e a qual rede pertencem.</p>';
+  var tbl = buildTable({ columns: cols, rows: decremento, childKey:'pdvs', childRenderer:pdvRenderer, searchable:true, defaultSortKey:'unid_increm', defaultSortDesc:false });
   card.appendChild(tbl);
   el.appendChild(card);
 
   var card2 = document.createElement('div'); card2.className='card';
-  card2.innerHTML = '<h2 class="h" style="margin-top:0">Top 20 combinações em maior crescimento projetado</h2>';
-  var tbl2 = buildTable({ columns: cols, rows: crescimento, searchable:true, defaultSortKey:'unid_increm' });
+  card2.innerHTML = '<h2 class="h" style="margin-top:0">Top 20 combinações em maior crescimento projetado</h2><p class="desc">Clique na seta para ver quais PDVs desse brick venderam essa marca, e a qual rede pertencem.</p>';
+  var tbl2 = buildTable({ columns: cols, rows: crescimento, childKey:'pdvs', childRenderer:pdvRenderer, searchable:true, defaultSortKey:'unid_increm' });
   card2.appendChild(tbl2);
   el.appendChild(card2);
 }
