@@ -1063,20 +1063,6 @@ function buildTrimestre(){
 }
 
 // ================= build: Análise Estratégica =================
-function statusOf(evol){
-  if(evol==null) return {label:'Sem base', cls:''};
-  if(evol < 0) return {label:'Crítico', cls:'neg'};
-  if(evol < 0.05) return {label:'Atenção', cls:'neg'};
-  if(evol < 0.15) return {label:'Estável', cls:''};
-  return {label:'Destaque', cls:'pos'};
-}
-function actionForSetor(evol){
-  if(evol==null) return 'Sem histórico suficiente para avaliar.';
-  if(evol < 0) return 'Queda projetada: revisar roteiro de visitas e sortimento das marcas críticas com o setor.';
-  if(evol < 0.05) return 'Crescimento abaixo da média do distrital: acompanhar de perto nas próximas semanas.';
-  if(evol < 0.15) return 'Performance estável: manter cadência atual de visitas.';
-  return 'Forte crescimento: garantir estoque/giro para sustentar a tendência.';
-}
 function actionForMarca(evol, repres){
   var represTxt = repres!=null ? ' ('+fmtPct(repres)+' do faturamento projetado do recorte)' : '';
   if(evol==null) return 'Marca nova/sem histórico &mdash; monitorar entrada no sortimento.';
@@ -1098,9 +1084,6 @@ function buildEstrategia(){
   var setorIdx = setorIdxOf(currentSetor);
   var tot = currentSetor==='Todos' ? DATA.total_setor : DATA.setores.find(function(s){return s.setor===currentSetor;});
 
-  var setoresRank = (currentSetor==='Todos' ? DATA.setores.slice() : DATA.setores.filter(function(s){return s.setor===currentSetor;}))
-    .sort(function(a,b){return (a.unid_evol==null?0:a.unid_evol)-(b.unid_evol==null?0:b.unid_evol);});
-
   var marcaAgg = aggregateBy('Marca', setorIdx).filter(function(m){return m.unid_jun25>=10;});
   var marcasPrioritarias = marcaAgg.slice().sort(function(a,b){return a.reais_increm-b.reais_increm;}).slice(0,10);
   var marcasDestaque = marcaAgg.slice().sort(function(a,b){return b.reais_increm-a.reais_increm;}).slice(0,8);
@@ -1108,45 +1091,8 @@ function buildEstrategia(){
   var brickAgg = aggregateBy('Brick', setorIdx).filter(function(b){return b.unid_jun25>=15;});
   var bricksCriticos = brickAgg.slice().sort(function(a,b){return (a.unid_evol==null?0:a.unid_evol)-(b.unid_evol==null?0:b.unid_evol);}).slice(0,12);
 
-  var piorSetor = setoresRank[0], melhorSetor = setoresRank[setoresRank.length-1];
-  var piorMarca = marcasPrioritarias[0], melhorMarca = marcasDestaque[0];
-
-  el.innerHTML = '';
-
-  var summary = document.createElement('div'); summary.className='card';
-  var summaryHtml = '<h2 class="h" style="margin-top:0">Resumo executivo'+filterNote()+'</h2>'+
-    '<p class="desc">Gerado automaticamente a partir dos dados consolidados (Setor, Marca e Brick). Use como ponto de partida &mdash; combine com o seu conhecimento do território antes de agir.</p>'+
-    '<div class="note">Projeção do mês cheio de '+DATA.file_info.periodo_atual+': <b>'+fmtInt(tot.unid_proj)+' unidades</b> ('+(tot.unid_evol>=0?'+':'')+fmtPct(tot.unid_evol)+' vs '+DATA.file_info.periodo_anterior+') e <b>'+fmtBRL(tot.reais_proj)+'</b> ('+(tot.reais_evol>=0?'+':'')+fmtPct(tot.reais_evol)+').</div>';
-  if(currentSetor==='Todos' && piorSetor && melhorSetor){
-    summaryHtml += '<div class="note">Setor que mais precisa de atenção: <b>'+esc(niceName(piorSetor.setor))+'</b> ('+fmtPct(piorSetor.unid_evol)+' de evolução). Setor em melhor momento: <b>'+esc(niceName(melhorSetor.setor))+'</b> ('+fmtPct(melhorSetor.unid_evol)+').</div>';
-  }
-  if(piorMarca){
-    summaryHtml += '<div class="note">Marca com maior risco de faturamento: <b>'+esc(niceName(piorMarca.key))+'</b> ('+fmtSignedBRL(piorMarca.reais_increm)+' de incremento projetado).'+(melhorMarca?' Marca em maior destaque: <b>'+esc(niceName(melhorMarca.key))+'</b> ('+fmtSignedBRL(melhorMarca.reais_increm)+').':'')+'</div>';
-  }
-  if(bricksCriticos[0]){
-    summaryHtml += '<div class="note">'+bricksCriticos.filter(function(b){return b.unid_evol!=null && b.unid_evol<0;}).length+' bricks (com volume relevante) estão com evolução projetada negativa. O mais crítico é <b>'+esc(niceName(bricksCriticos[0].key))+'</b> ('+fmtPct(bricksCriticos[0].unid_evol)+').</div>';
-  }
-  summary.innerHTML = summaryHtml;
-  el.appendChild(summary);
-
-  var cardSetor = document.createElement('div'); cardSetor.className='card';
-  cardSetor.innerHTML = '<h2 class="h" style="margin-top:0">Setores &mdash; prioridade de atenção</h2><p class="desc">Ordenado do que mais precisa de atenção para o que está em melhor momento (evolução projetada de unidades).</p>';
-  var tblSetor = buildTable({
-    columns:[
-      {key:'setor', label:'Setor', fmt:function(v){return esc(niceName(v));}},
-      {key:'unid_evol', label:'Evol % Unid', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtPct(v)+'</span>';}},
-      {key:'reais_increm', label:'Increm R$', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtSignedBRL(v)+'</span>';}},
-      {key:'status', label:'Status', fmt:function(v,row){return '<span class="'+row._statusCls+'">'+esc(v)+'</span>';}},
-      {key:'acao', label:'Ação sugerida', fmt:function(v){return '<span style="white-space:normal;display:block;max-width:340px;text-align:left">'+esc(v)+'</span>';}},
-    ],
-    rows: setoresRank.map(function(s){
-      var st = statusOf(s.unid_evol);
-      return Object.assign({}, s, {status:st.label, _statusCls:st.cls, acao:actionForSetor(s.unid_evol)});
-    }),
-    defaultSortKey:'unid_evol', defaultSortDesc:false
-  });
-  cardSetor.appendChild(tblSetor);
-  el.appendChild(cardSetor);
+  el.innerHTML = '<h2 class="h">Análise Estratégica'+filterNote()+'</h2>'+
+    '<p class="desc">Gerado automaticamente a partir dos dados consolidados (Setor, Marca e Brick). Use como ponto de partida &mdash; combine com o seu conhecimento do território antes de agir.</p>';
 
   var cardBrick = document.createElement('div'); cardBrick.className='card';
   cardBrick.innerHTML = '<h2 class="h" style="margin-top:0">Bricks que mais precisam de atenção</h2><p class="desc">Bricks com pelo menos 15 unidades em '+DATA.file_info.periodo_anterior+', ordenados pela pior evolução projetada. Ver combinações específicas de marca em cada brick na aba "Decremento por Brick".</p>';
@@ -1213,7 +1159,7 @@ function buildMetodologia(){
     '<div class="note"><b>Filtro de Setor:</b> o seletor no topo da página recalcula, na hora, todas as abas a partir dos dados linha a linha (Visão Geral, Ranking de Marcas, Ranking de PDV, Decremento por Brick, Outras Dimensões, YTD, Trimestre e Análise Estratégica). A única exceção é a aba <b>Mapa Trimestral</b>, cuja fonte original (aba MAPA TRI) não possui quebra por Setor.</div>'+
     '<div class="note"><b>Aba MAPA TRI:</b> não foi atualizada para o ciclo mais recente &mdash; continua refletindo o trimestre Ago&ndash;Set&ndash;Out/24 vs Ago&ndash;Set&ndash;Out/25 com projeção para Nov/25. Mantida como está, pois representa uma leitura trimestral complementar e não o mesmo recorte mensal das demais abas.</div>'+
     '<div class="note"><b>Aba MARCAS EM DECREMENTO POR BRICK:</b> a tabela dinâmica dessa aba está configurada com quebra por Setor (dados idênticos à aba MDTR), não por Marca/Brick como o nome sugere. Para entregar a análise pretendida, este dashboard recalculou o decremento por Brick × Marca diretamente da aba BASE MDTR (ver aba "Decremento por Brick").</div>'+
-    '<div class="note"><b>Análise Estratégica:</b> as classificações de status (Crítico/Atenção/Estável/Destaque) e as "ações sugeridas" são heurísticas simples baseadas nos limiares de evolução % e materialidade (representatividade no faturamento), geradas automaticamente a partir dos dados. Servem como ponto de partida para priorização, não substituem o conhecimento do gestor sobre o território.</div>'+
+    '<div class="note"><b>Análise Estratégica:</b> as "ações sugeridas" para Bricks e Marcas são heurísticas simples baseadas nos limiares de evolução % e materialidade (representatividade no faturamento), geradas automaticamente a partir dos dados. Servem como ponto de partida para priorização, não substituem o conhecimento do gestor sobre o território.</div>'+
     '<div class="note"><b>Universo x vendas:</b> a aba BASE MDTR cadastra '+fmtInt(DATA.meta.total_rows)+' combinações Brick × PDV × Marca (o universo potencial de venda do distrital); '+fmtInt(DATA.meta.rows_with_sales)+' delas registraram alguma venda (unidades ou reais) no período analisado. Contagens de "Bricks", "Marcas", "PDVs" e "Redes" nos indicadores gerais refletem apenas os que tiveram venda no período.</div>'+
     '<div class="note"><b>Privacidade:</b> este arquivo HTML é autocontido (dados, estilos e código embutidos) e não faz nenhuma chamada de rede — pode ser aberto direto do disco, sem internet, e enviado por e-mail ou pendrive com segurança.</div>'+
     '<div class="note"><b>Gerado em:</b> '+esc(DATA.file_info.gerado_em||'')+'</div>';
