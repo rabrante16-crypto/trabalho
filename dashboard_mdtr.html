@@ -368,7 +368,7 @@ function buildTable(opts){
       var inp = box.querySelector('#'+opts._id+'_search');
       inp.addEventListener('input', function(){ searchVal = inp.value; render(); inp.focus(); inp.setSelectionRange(inp.value.length,inp.value.length); });
     }
-    box.querySelectorAll('th').forEach(function(th){
+    box.querySelectorAll('th[data-k]').forEach(function(th){
       th.addEventListener('click', function(){
         var k = th.getAttribute('data-k');
         if(sortKey===k) sortDesc = !sortDesc; else { sortKey=k; sortDesc=true; }
@@ -383,10 +383,45 @@ function buildTable(opts){
         render();
       });
     });
+    // sortable headers inside drill-down / nested mini-tables (childRenderer output);
+    // stored in the same `expanded` bag under a "sort:" prefix so it survives re-renders.
+    box.querySelectorAll('th[data-sk]').forEach(function(th){
+      th.addEventListener('click', function(e){
+        e.stopPropagation();
+        var tid = th.getAttribute('data-st'), k = th.getAttribute('data-sk');
+        var skey = 'sort:'+tid;
+        var cur = expanded[skey] || {};
+        if(cur.key===k) cur.desc = !cur.desc; else { cur = {key:k, desc:true}; }
+        expanded[skey] = cur;
+        render();
+      });
+    });
   }
   opts._id = 'tbl'+Math.random().toString(36).slice(2);
   render();
   return box;
+}
+
+// ================= sortable mini-table helpers (used by drill-down childRenderers) =================
+function miniSortState(expanded, tableId, defaultKey, defaultDesc){
+  return (expanded && expanded['sort:'+tableId]) || {key:defaultKey, desc:defaultDesc!==false};
+}
+function miniSortedRows(rows, sortInfo){
+  var key = sortInfo.key, desc = sortInfo.desc!==false;
+  var out = rows.slice();
+  out.sort(function(a,b){
+    var av=a[key], bv=b[key];
+    var aIsStr = typeof av==='string', bIsStr = typeof bv==='string';
+    if(av==null) av = aIsStr||bIsStr ? '' : -Infinity;
+    if(bv==null) bv = aIsStr||bIsStr ? '' : -Infinity;
+    if(typeof av==='string' || typeof bv==='string') return desc ? String(bv).localeCompare(String(av)) : String(av).localeCompare(String(bv));
+    return desc ? (bv-av) : (av-bv);
+  });
+  return out;
+}
+function miniTh(label, key, tableId, sortInfo){
+  var active = sortInfo.key===key;
+  return '<th data-sk="'+key+'" data-st="'+tableId+'"'+(active?' class="sorted"':'')+'>'+esc(label)+(active?(sortInfo.desc?' ▼':' ▲'):'')+'</th>';
 }
 
 // ================= aggregation engine (drives the Setor filter across every tab) =================
@@ -501,7 +536,7 @@ function pdvBreakdown(filterFn, setorFilterIdx){
   return out.sort(function(a,b){return b.reais_proj-a.reais_proj;});
 }
 
-function pdvMiniTable(pdvRows, opts){
+function pdvMiniTable(pdvRows, opts, expanded, tableId){
   opts = opts||{};
   if(!pdvRows || !pdvRows.length){
     return '<div style="padding:4px 0;color:var(--text-secondary);font-size:12px">Nenhum PDV com venda encontrado para este recorte'+(opts.showSetor===false?'':' (dentro do setor selecionado, se houver filtro ativo)')+'.</div>';
@@ -509,12 +544,16 @@ function pdvMiniTable(pdvRows, opts){
   var showSetor = opts.showSetor!==false && currentSetor==='Todos';
   var showBrick = opts.showBrick!==false;
   var showBandeira = opts.showBandeira!==false;
-  var shown = pdvRows;
-  var countNote = pdvRows.length+' PDV(s) compõem este total (ordenados por faturamento'+(pdvRows.length>10?'; role a lista para ver todos':'')+'):';
+  tableId = tableId || 'pdvMini';
+  var sortInfo = miniSortState(expanded, tableId, 'reais_proj', true);
+  var shown = miniSortedRows(pdvRows, sortInfo);
+  var countNote = pdvRows.length+' PDV(s) compõem este total (clique num cabeçalho para ordenar'+(pdvRows.length>10?'; role a lista para ver todos':'')+'):';
   var html = '<div style="font-size:11.5px;color:var(--text-secondary);margin-bottom:4px">'+countNote+'</div>'+
     '<div class="tbl-wrap" style="max-height:340px;overflow-y:auto"><table class="dtable mini"><thead><tr>'+
-    (showSetor?'<th>Setor</th>':'')+'<th>PDV</th>'+(showBrick?'<th>Brick</th>':'')+(showBandeira?'<th>Rede (Bandeira)</th>':'')+
-    '<th>'+DATA.file_info.periodo_anterior+' Unid</th><th>'+DATA.file_info.periodo_atual+' Unid</th><th>'+DATA.file_info.periodo_atual+' R$</th><th>Increm R$</th>'+
+    (showSetor?miniTh('Setor','setor',tableId,sortInfo):'')+miniTh('PDV','pdv',tableId,sortInfo)+
+    (showBrick?miniTh('Brick','brick',tableId,sortInfo):'')+(showBandeira?miniTh('Rede (Bandeira)','bandeira',tableId,sortInfo):'')+
+    miniTh(DATA.file_info.periodo_anterior+' Unid','unid_jun25',tableId,sortInfo)+miniTh(DATA.file_info.periodo_atual+' Unid','unid_proj',tableId,sortInfo)+
+    miniTh(DATA.file_info.periodo_atual+' R$','reais_proj',tableId,sortInfo)+miniTh('Increm R$','reais_increm',tableId,sortInfo)+
     '</tr></thead><tbody>';
   shown.forEach(function(p){
     html += '<tr>'+
@@ -560,14 +599,18 @@ function nestedSetorPdvRenderer(finalOpts){
     if(!pdvRows || !pdvRows.length){
       return '<div style="padding:4px 0;color:var(--text-secondary);font-size:12px">Nenhum PDV com venda encontrado para este recorte.</div>';
     }
-    var setorRows = groupPdvBySetor(pdvRows);
-    var countNote = setorRows.length+' setor(es) compõem este total (clique num setor para ver os PDVs):';
+    var tableId = parentRid+'_setorTable';
+    var sortInfo = miniSortState(expanded, tableId, 'reais_proj', true);
+    var setorRows = miniSortedRows(groupPdvBySetor(pdvRows), sortInfo);
+    var countNote = setorRows.length+' setor(es) compõem este total (clique num setor para ver os PDVs; clique num cabeçalho para ordenar):';
     var html = '<div style="font-size:11.5px;color:var(--text-secondary);margin-bottom:4px">'+countNote+'</div>'+
       '<div class="tbl-wrap"><table class="dtable mini"><thead><tr>'+
-      '<th>Setor</th><th>'+DATA.file_info.periodo_anterior+' Unid</th><th>'+DATA.file_info.periodo_atual+' Unid</th><th>'+DATA.file_info.periodo_atual+' R$</th><th>Increm R$</th>'+
+      miniTh('Setor','setor',tableId,sortInfo)+miniTh(DATA.file_info.periodo_anterior+' Unid','unid_jun25',tableId,sortInfo)+
+      miniTh(DATA.file_info.periodo_atual+' Unid','unid_proj',tableId,sortInfo)+miniTh(DATA.file_info.periodo_atual+' R$','reais_proj',tableId,sortInfo)+
+      miniTh('Increm R$','reais_increm',tableId,sortInfo)+
       '</tr></thead><tbody>';
-    setorRows.forEach(function(s, i){
-      var subRid = parentRid+'_setor'+i;
+    setorRows.forEach(function(s){
+      var subRid = parentRid+'_setor_'+String(s.setor).replace(/[^a-z0-9]/gi,'');
       var isOpen = !!expanded[subRid];
       html += '<tr>'+
         '<td style="text-align:left"><span class="expand-btn" data-rid="'+subRid+'">'+(isOpen?'▼':'▶')+'</span>'+esc(niceName(s.setor))+'</td>'+
@@ -576,7 +619,7 @@ function nestedSetorPdvRenderer(finalOpts){
         '</tr>';
       if(isOpen){
         html += '<tr><td colspan="5" style="background:var(--surface-2);padding:6px 6px 10px 24px">'+
-          pdvMiniTable(s.pdvs, Object.assign({showSetor:false}, finalOpts)) +
+          pdvMiniTable(s.pdvs, Object.assign({showSetor:false}, finalOpts), expanded, subRid+'_pdvTable') +
           '</td></tr>';
       }
     });
@@ -859,7 +902,7 @@ function buildBrick(){
       {key:'reais_increm', label:'Increm R$', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtSignedBRL(v)+'</span>';}},
   ];
 
-  var pdvRenderer = function(kids){ return pdvMiniTable(kids, {showBrick:false}); };
+  var pdvRenderer = function(kids, row, expanded, rid){ return pdvMiniTable(kids, {showBrick:false}, expanded, rid+'_pdvTable'); };
 
   var card = document.createElement('div'); card.className='card';
   card.innerHTML = '<h2 class="h" style="margin-top:0">Top 20 combinações em maior decremento</h2><p class="desc">Clique na seta para ver quais PDVs desse brick venderam essa marca, e a qual rede pertencem.</p>';
