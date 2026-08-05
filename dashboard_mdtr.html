@@ -551,33 +551,41 @@ function groupPdvBySetor(pdvRows){
 
 // two-level drill-down for Ranking de Marcas: click a marca -> consolidated Setor rows;
 // click a Setor row -> nested PDV breakdown for that setor (reuses pdvMiniTable).
-function marcaSetorPdvRenderer(pdvRows, marcaRow, expanded, parentRid){
-  if(!pdvRows || !pdvRows.length){
-    return '<div style="padding:4px 0;color:var(--text-secondary);font-size:12px">Nenhum PDV com venda encontrado para este recorte.</div>';
-  }
-  var setorRows = groupPdvBySetor(pdvRows);
-  var countNote = setorRows.length+' setor(es) compõem este total (clique num setor para ver os PDVs):';
-  var html = '<div style="font-size:11.5px;color:var(--text-secondary);margin-bottom:4px">'+countNote+'</div>'+
-    '<div class="tbl-wrap"><table class="dtable mini"><thead><tr>'+
-    '<th>Setor</th><th>'+DATA.file_info.periodo_anterior+' Unid</th><th>'+DATA.file_info.periodo_atual+' Unid</th><th>'+DATA.file_info.periodo_atual+' R$</th><th>Increm R$</th>'+
-    '</tr></thead><tbody>';
-  setorRows.forEach(function(s, i){
-    var subRid = parentRid+'_setor'+i;
-    var isOpen = !!expanded[subRid];
-    html += '<tr>'+
-      '<td style="text-align:left"><span class="expand-btn" data-rid="'+subRid+'">'+(isOpen?'▼':'▶')+'</span>'+esc(niceName(s.setor))+'</td>'+
-      '<td>'+fmtInt(s.unid_jun25)+'</td><td>'+fmtInt(s.unid_proj)+'</td><td>'+fmtBRL(s.reais_proj)+'</td>'+
-      '<td><span class="'+signClass(s.reais_increm)+'">'+fmtSignedBRL(s.reais_increm)+'</span></td>'+
-      '</tr>';
-    if(isOpen){
-      html += '<tr><td colspan="5" style="background:var(--surface-2);padding:6px 6px 10px 24px">'+
-        pdvMiniTable(s.pdvs, {showSetor:false}) +
-        '</td></tr>';
+// factory: 2nd level (consolidated Setor rows) -> 3rd level (PDV breakdown, via pdvMiniTable).
+// finalOpts lets the caller hide whichever column is redundant with its own top-level grouping
+// (e.g. Ranking PDV already groups by Bandeira, so the PDV list at the bottom hides it).
+function nestedSetorPdvRenderer(finalOpts){
+  finalOpts = finalOpts || {};
+  return function(pdvRows, parentRow, expanded, parentRid){
+    if(!pdvRows || !pdvRows.length){
+      return '<div style="padding:4px 0;color:var(--text-secondary);font-size:12px">Nenhum PDV com venda encontrado para este recorte.</div>';
     }
-  });
-  html += '</tbody></table></div>';
-  return html;
+    var setorRows = groupPdvBySetor(pdvRows);
+    var countNote = setorRows.length+' setor(es) compõem este total (clique num setor para ver os PDVs):';
+    var html = '<div style="font-size:11.5px;color:var(--text-secondary);margin-bottom:4px">'+countNote+'</div>'+
+      '<div class="tbl-wrap"><table class="dtable mini"><thead><tr>'+
+      '<th>Setor</th><th>'+DATA.file_info.periodo_anterior+' Unid</th><th>'+DATA.file_info.periodo_atual+' Unid</th><th>'+DATA.file_info.periodo_atual+' R$</th><th>Increm R$</th>'+
+      '</tr></thead><tbody>';
+    setorRows.forEach(function(s, i){
+      var subRid = parentRid+'_setor'+i;
+      var isOpen = !!expanded[subRid];
+      html += '<tr>'+
+        '<td style="text-align:left"><span class="expand-btn" data-rid="'+subRid+'">'+(isOpen?'▼':'▶')+'</span>'+esc(niceName(s.setor))+'</td>'+
+        '<td>'+fmtInt(s.unid_jun25)+'</td><td>'+fmtInt(s.unid_proj)+'</td><td>'+fmtBRL(s.reais_proj)+'</td>'+
+        '<td><span class="'+signClass(s.reais_increm)+'">'+fmtSignedBRL(s.reais_increm)+'</span></td>'+
+        '</tr>';
+      if(isOpen){
+        html += '<tr><td colspan="5" style="background:var(--surface-2);padding:6px 6px 10px 24px">'+
+          pdvMiniTable(s.pdvs, Object.assign({showSetor:false}, finalOpts)) +
+          '</td></tr>';
+      }
+    });
+    html += '</tbody></table></div>';
+    return html;
+  };
 }
+var marcaSetorPdvRenderer = nestedSetorPdvRenderer({});
+var bandeiraSetorPdvRenderer = nestedSetorPdvRenderer({showBandeira:false});
 
 // ================= app state =================
 var currentSetor = 'Todos';
@@ -768,7 +776,7 @@ function buildRankingPdv(){
   el.appendChild(card);
 
   var card2 = document.createElement('div'); card2.className='card';
-  card2.innerHTML = '<h2 class="h" style="margin-top:0">Todas as redes</h2><p class="desc">Clique na seta para ver quais PDVs (lojas) dessa rede, e em qual Brick cada um está.</p>';
+  card2.innerHTML = '<h2 class="h" style="margin-top:0">Todas as redes</h2><p class="desc">Clique na seta para ver o consolidado por Setor; clique num Setor para ver os PDVs (lojas) daquela rede naquele setor, e em qual Brick cada um está.</p>';
   var tbl = buildTable({
     columns:[
       {key:'bandeira', label:'Rede (Bandeira)', fmt:function(v){return esc(v);}},
@@ -779,7 +787,7 @@ function buildRankingPdv(){
       {key:'reais_increm', label:'Increm R$', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtSignedBRL(v)+'</span>';}},
       {key:'repres', label:'Repres %', fmt:fmtPct},
     ],
-    rows: rows, childKey:'pdvs', childRenderer:function(kids){return pdvMiniTable(kids, {showBandeira:false});}, searchable:true, defaultSortKey:'reais_proj',
+    rows: rows, childKey:'pdvs', childRenderer:bandeiraSetorPdvRenderer, searchable:true, defaultSortKey:'reais_proj',
     totalRow: setorIdx==null ? Object.assign({bandeira:'Total Geral'}, DATA.ranking_pdv_total) : Object.assign({bandeira:'Total do setor'}, DATA.setores.find(function(s){return s.setor===currentSetor;}))
   });
   card2.appendChild(tbl);
