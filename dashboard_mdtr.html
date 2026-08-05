@@ -349,7 +349,7 @@ function buildTable(opts){
       html += '</tr>';
       if(hasChildren && expanded[rid]){
         html += '<tr class="child-detail"><td colspan="'+opts.columns.length+'">'+
-          (opts.childRenderer ? opts.childRenderer(row[opts.childKey], row) : '') +
+          (opts.childRenderer ? opts.childRenderer(row[opts.childKey], row, expanded, rid) : '') +
           '</td></tr>';
       }
     });
@@ -530,6 +530,55 @@ function pdvMiniTable(pdvRows, opts){
   return html;
 }
 
+// group PDV-level rows (already run through makeAgg) into one consolidated row per Setor
+function groupPdvBySetor(pdvRows){
+  var map = {};
+  pdvRows.forEach(function(p){
+    var k = p.setor;
+    var e = map[k]; if(!e){ e = {setor:k, u25:0, u26:0, r25:0, r26:0, pdvs:[]}; map[k]=e; }
+    e.u25+=p.unid_jun25; e.u26+=p.unid_jun26; e.r25+=p.reais_jun25; e.r26+=p.reais_jun26;
+    e.pdvs.push(p);
+  });
+  var out = Object.keys(map).map(function(k){
+    var e = map[k];
+    var agg = makeAgg(e.u25, e.u26, e.r25, e.r26);
+    agg.setor = e.setor;
+    agg.pdvs = e.pdvs.slice().sort(function(a,b){return b.reais_proj-a.reais_proj;});
+    return agg;
+  });
+  return out.sort(function(a,b){return b.reais_proj-a.reais_proj;});
+}
+
+// two-level drill-down for Ranking de Marcas: click a marca -> consolidated Setor rows;
+// click a Setor row -> nested PDV breakdown for that setor (reuses pdvMiniTable).
+function marcaSetorPdvRenderer(pdvRows, marcaRow, expanded, parentRid){
+  if(!pdvRows || !pdvRows.length){
+    return '<div style="padding:4px 0;color:var(--text-secondary);font-size:12px">Nenhum PDV com venda encontrado para este recorte.</div>';
+  }
+  var setorRows = groupPdvBySetor(pdvRows);
+  var countNote = setorRows.length+' setor(es) compõem este total (clique num setor para ver os PDVs):';
+  var html = '<div style="font-size:11.5px;color:var(--text-secondary);margin-bottom:4px">'+countNote+'</div>'+
+    '<div class="tbl-wrap"><table class="dtable mini"><thead><tr>'+
+    '<th>Setor</th><th>'+DATA.file_info.periodo_anterior+' Unid</th><th>'+DATA.file_info.periodo_atual+' Unid</th><th>'+DATA.file_info.periodo_atual+' R$</th><th>Increm R$</th>'+
+    '</tr></thead><tbody>';
+  setorRows.forEach(function(s, i){
+    var subRid = parentRid+'_setor'+i;
+    var isOpen = !!expanded[subRid];
+    html += '<tr>'+
+      '<td style="text-align:left"><span class="expand-btn" data-rid="'+subRid+'">'+(isOpen?'▼':'▶')+'</span>'+esc(niceName(s.setor))+'</td>'+
+      '<td>'+fmtInt(s.unid_jun25)+'</td><td>'+fmtInt(s.unid_proj)+'</td><td>'+fmtBRL(s.reais_proj)+'</td>'+
+      '<td><span class="'+signClass(s.reais_increm)+'">'+fmtSignedBRL(s.reais_increm)+'</span></td>'+
+      '</tr>';
+    if(isOpen){
+      html += '<tr><td colspan="5" style="background:var(--surface-2);padding:6px 6px 10px 24px">'+
+        pdvMiniTable(s.pdvs, {showSetor:false}) +
+        '</td></tr>';
+    }
+  });
+  html += '</tbody></table></div>';
+  return html;
+}
+
 // ================= app state =================
 var currentSetor = 'Todos';
 
@@ -662,7 +711,7 @@ function buildRankingMarcas(){
   el.appendChild(card);
 
   var card2 = document.createElement('div'); card2.className='card';
-  card2.innerHTML = '<h2 class="h" style="margin-top:0">Todas as marcas</h2><p class="desc">Clique na seta para ver quais PDVs (com Brick e Rede/Bandeira) compõem o total da marca. Clique em um cabeçalho para ordenar.</p>';
+  card2.innerHTML = '<h2 class="h" style="margin-top:0">Todas as marcas</h2><p class="desc">Clique na seta para ver o consolidado por Setor; clique num Setor para ver os PDVs (com Brick e Rede/Bandeira) que compõem aquele total. Clique em um cabeçalho para ordenar.</p>';
   var tbl = buildTable({
     columns:[
       {key:'marca', label:'Marca', fmt:function(v){return esc(niceName(v));}},
@@ -674,7 +723,7 @@ function buildRankingMarcas(){
       {key:'reais_increm', label:'Increm R$', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtSignedBRL(v)+'</span>';}},
       {key:'repres', label:'Repres %', fmt:fmtPct},
     ],
-    rows: rows, childKey:'pdvs', childRenderer:pdvMiniTable, searchable:true, defaultSortKey:'unid_increm', defaultSortDesc:false,
+    rows: rows, childKey:'pdvs', childRenderer:marcaSetorPdvRenderer, searchable:true, defaultSortKey:'unid_increm', defaultSortDesc:false,
     totalRow: setorIdx==null ? Object.assign({marca:'Total Geral'}, DATA.ranking_marcas_total) : Object.assign({marca:'Total do setor'}, DATA.setores.find(function(s){return s.setor===currentSetor;}))
   });
   card2.appendChild(tbl);
