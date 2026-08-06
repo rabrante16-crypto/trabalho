@@ -77,7 +77,7 @@
   .legend .sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px;}
   table.dtable{border-collapse:separate;border-spacing:0;width:100%;font-size:12.8px;}
   table.dtable th{
-    text-align:right;color:var(--text-muted);font-weight:600;font-size:11.5px;text-transform:uppercase;
+    text-align:right;color:var(--text-muted);font-weight:600;font-size:11.5px;
     letter-spacing:.02em;padding:8px 8px;border-bottom:1px solid var(--baseline);cursor:pointer;user-select:none;white-space:nowrap;
   }
   table.dtable th:first-child, table.dtable td:first-child{text-align:left;}
@@ -386,7 +386,10 @@ function miniSortedRows(rows, sortInfo){
 function miniTh(label, key, tableId, sortInfo, alignLeft){
   var active = sortInfo && sortInfo.key===key;
   var style = alignLeft ? ' style="text-align:left"' : '';
-  return '<th data-sk="'+key+'" data-st="'+esc(tableId)+'"'+style+' class="'+(active?'sorted':'')+'">'+esc(label)+(active?(sortInfo.desc?' ▼':' ▲'):'')+'</th>';
+  // header text is uppercased HERE (in content) rather than via CSS text-transform, since some
+  // browsers compute a table's intrinsic column width from the pre-transform text, leaving the
+  // rendered (transformed, often wider) header too wide for its own column
+  return '<th data-sk="'+key+'" data-st="'+esc(tableId)+'"'+style+' class="'+(active?'sorted':'')+'">'+esc(String(label).toUpperCase())+(active?(sortInfo.desc?' ▼':' ▲'):'')+'</th>';
 }
 
 // ================= TABLE component (sortable + searchable + expandable) =================
@@ -419,7 +422,7 @@ function buildTable(opts){
     var html = '<div class="tbl-wrap"><table class="dtable"><thead><tr>';
     opts.columns.forEach(function(c){
       var alignStyle = c.headAlign ? ' style="text-align:'+c.headAlign+'"' : '';
-      html += '<th data-k="'+c.key+'" class="'+(sortKey===c.key?'sorted':'')+'"'+alignStyle+'>'+esc(c.label)+(sortKey===c.key?(sortDesc?' ▼':' ▲'):'')+'</th>';
+      html += '<th data-k="'+c.key+'" class="'+(sortKey===c.key?'sorted':'')+'"'+alignStyle+'>'+esc(String(c.label).toUpperCase())+(sortKey===c.key?(sortDesc?' ▼':' ▲'):'')+'</th>';
     });
     html += '</tr></thead><tbody>';
     // rid is derived from the row's own label (not its position) so expand/collapse and sort
