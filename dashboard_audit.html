@@ -108,10 +108,14 @@
   }
   .badge{display:inline-block;padding:1px 7px;border-radius:20px;font-size:11px;background:var(--chip-bg);color:var(--text-secondary);}
   .produto-euf{color:var(--babyblue);font-weight:600;}
-  .seg-group{display:inline-flex;flex-wrap:wrap;gap:4px;background:var(--chip-bg);border-radius:10px;padding:4px;}
-  .seg-btn{border:none;background:transparent;color:var(--text-secondary);font-size:12px;padding:5px 10px;border-radius:7px;cursor:pointer;font-family:inherit;white-space:nowrap;}
-  .seg-btn:hover{color:var(--text-primary);}
-  .seg-btn.active{background:var(--surface-3);color:var(--text-primary);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.12);}
+  .seg-group{display:inline-flex;flex-wrap:wrap;gap:6px;padding:2px 0;}
+  .seg-btn{
+    border:1px solid var(--border);background:var(--surface-3);color:var(--text-secondary);
+    font-size:12px;padding:6px 13px;border-radius:999px;cursor:pointer;font-family:inherit;white-space:nowrap;
+    transition:background .15s ease, border-color .15s ease, color .15s ease;
+  }
+  .seg-btn:hover{color:var(--text-primary);border-color:var(--baseline);}
+  .seg-btn.active{background:var(--s1);border-color:var(--s1);color:#fff;font-weight:600;}
   @keyframes barPulse{0%,100%{filter:drop-shadow(0 0 0px var(--glow-color,var(--s4)));}50%{filter:drop-shadow(0 0 5px var(--glow-color,var(--s4)));}}
   @keyframes badgeIn{from{opacity:0;transform:translateX(-4px);}to{opacity:1;transform:translateX(0);}}
   @keyframes lineAppear{from{opacity:0;}to{opacity:1;}}
@@ -362,13 +366,35 @@ function signBar(items, opts){
   return wrap;
 }
 
+// ---------- generic sortable-mini-table helpers (drill-down/expansion tables) ----------
+// sort state for a mini-table is stashed inside the shared `expanded` state bag under a
+// 'sort:'+tableId key, so it survives outer re-renders exactly like expand/collapse state does.
+function miniSortState(expanded, tableId){
+  return (expanded && expanded['sort:'+tableId]) || {key:null, desc:true};
+}
+function miniSortedRows(rows, sortInfo){
+  if(!sortInfo || !sortInfo.key) return rows;
+  var k = sortInfo.key, desc = sortInfo.desc;
+  return rows.slice().sort(function(a,b){
+    var av=a[k], bv=b[k];
+    if(av==null) av = -Infinity; if(bv==null) bv = -Infinity;
+    if(typeof av==='string') return desc? String(bv).localeCompare(av) : String(av).localeCompare(bv);
+    return desc? (bv-av) : (av-bv);
+  });
+}
+function miniTh(label, key, tableId, sortInfo, alignLeft){
+  var active = sortInfo && sortInfo.key===key;
+  var style = alignLeft ? ' style="text-align:left"' : '';
+  return '<th data-sk="'+key+'" data-st="'+esc(tableId)+'"'+style+' class="'+(active?'sorted':'')+'">'+esc(label)+(active?(sortInfo.desc?' ▼':' ▲'):'')+'</th>';
+}
+
 // ================= TABLE component (sortable + searchable + expandable) =================
 function buildTable(opts){
   var box = document.createElement('div');
   var searchVal = '';
   var sortKey = opts.defaultSortKey || null;
   var sortDesc = opts.defaultSortDesc!==false;
-  var expanded = {};
+  var expanded = opts.expandedState || {};
 
   function matches(row){
     if(!searchVal) return true;
@@ -394,9 +420,15 @@ function buildTable(opts){
       html += '<th data-k="'+c.key+'" class="'+(sortKey===c.key?'sorted':'')+'"'+alignStyle+'>'+esc(c.label)+(sortKey===c.key?(sortDesc?' ▼':' ▲'):'')+'</th>';
     });
     html += '</tr></thead><tbody>';
+    // rid is derived from the row's own label (not its position) so expand/collapse and sort
+    // state stay attached to the right row even after a re-sort or a filter change re-renders
+    // this table from scratch; only actual duplicate labels fall back to a disambiguating suffix.
+    var ridLabelCount = {};
     capped.forEach(function(row, idx){
       var hasChildren = opts.childKey && row[opts.childKey] && row[opts.childKey].length;
-      var rid = 'r'+idx+'_'+(row[opts.columns[0].key]||'').replace(/[^a-z0-9]/gi,'');
+      var labelKey = String(row[opts.columns[0].key]||'row').replace(/[^a-z0-9]/gi,'') || 'row';
+      var dupCount = ridLabelCount[labelKey] = (ridLabelCount[labelKey]||0)+1;
+      var rid = 'r_'+labelKey+(dupCount>1?'_'+dupCount:'');
       html += '<tr>';
       opts.columns.forEach(function(c,ci){
         var v = row[c.key];
@@ -412,7 +444,7 @@ function buildTable(opts){
       html += '</tr>';
       if(hasChildren && expanded[rid]){
         html += '<tr class="child-detail"><td colspan="'+opts.columns.length+'">'+
-          (opts.childRenderer ? opts.childRenderer(row[opts.childKey], row) : '') +
+          (opts.childRenderer ? opts.childRenderer(row[opts.childKey], row, expanded, rid) : '') +
           '</td></tr>';
       }
     });
@@ -434,7 +466,7 @@ function buildTable(opts){
       var inp = box.querySelector('#'+opts._id+'_search');
       inp.addEventListener('input', function(){ searchVal = inp.value; render(); inp.focus(); inp.setSelectionRange(inp.value.length,inp.value.length); });
     }
-    box.querySelectorAll('th').forEach(function(th){
+    box.querySelectorAll('th[data-k]').forEach(function(th){
       th.addEventListener('click', function(){
         var k = th.getAttribute('data-k');
         if(sortKey===k) sortDesc = !sortDesc; else { sortKey=k; sortDesc=true; }
@@ -446,6 +478,19 @@ function buildTable(opts){
         e.stopPropagation();
         var rid = btn.getAttribute('data-rid');
         expanded[rid] = !expanded[rid];
+        render();
+      });
+    });
+    // sortable headers inside drill-down/expansion mini-tables (distinct data-sk attribute so
+    // clicks there never collide with this table's own data-k column sort above)
+    box.querySelectorAll('th[data-sk]').forEach(function(th){
+      th.addEventListener('click', function(e){
+        e.stopPropagation();
+        var k = th.getAttribute('data-sk');
+        var tid = th.getAttribute('data-st');
+        var cur = expanded['sort:'+tid];
+        if(cur && cur.key===k) expanded['sort:'+tid] = {key:k, desc:!cur.desc};
+        else expanded['sort:'+tid] = {key:k, desc:true};
         render();
       });
     });
@@ -580,13 +625,16 @@ function physiciansForProdutoFiltered(produtoIdx, setorIdx, mercadoIdx, cadIdx, 
 }
 
 // leaner mini-table matching the literal DEIXARAM DE PRESCREVER pivot columns (no ESP/Setor/CAD/TT)
-function deixMedicoMiniTable(rows){
+function deixMedicoMiniTable(rows, row, expanded, rid){
   if(!rows || !rows.length){
     return '<div style="padding:4px 0;color:var(--text-secondary);font-size:12px">Nenhum médico encontrado para este recorte.</div>';
   }
-  var html = '<div style="font-size:11.5px;color:var(--text-secondary);margin-bottom:4px">'+rows.length+' médico(s) (ordenados por maior queda de EUF; role a lista para ver todos):</div>'+
+  var tableId = (rid||'deixMed')+'_medTable';
+  var sortInfo = miniSortState(expanded, tableId);
+  rows = miniSortedRows(rows, sortInfo);
+  var html = '<div style="font-size:11.5px;color:var(--text-secondary);margin-bottom:4px">'+rows.length+' médico(s) (ordenados por maior queda de EUF por padrão; clique numa coluna para ordenar; role a lista para ver todos):</div>'+
     '<div class="tbl-wrap" style="max-height:340px;overflow-y:auto"><table class="dtable mini"><thead><tr>'+
-    '<th>Médico</th><th>EUF Ant</th><th>EUF Atual</th><th>Increm EUF</th><th>Evol EUF</th>'+
+    miniTh('Médico','medico',tableId,sortInfo,true)+miniTh('EUF Ant','euf_ant',tableId,sortInfo)+miniTh('EUF Atual','euf_atual',tableId,sortInfo)+miniTh('Increm EUF','euf_incr',tableId,sortInfo)+miniTh('Evol EUF','euf_evol',tableId,sortInfo)+
     '</tr></thead><tbody>';
   rows.forEach(function(p){
     html += '<tr>'+
@@ -633,18 +681,25 @@ function productsOf(crmIdx){
 }
 
 // ================= mini-table renderer for row expansions =================
-function physicianMiniTable(rows, opts){
+function physicianMiniTable(rows, opts, expanded, rid){
   opts = opts||{};
   if(!rows || !rows.length){
     return '<div style="padding:4px 0;color:var(--text-secondary);font-size:12px">Nenhum médico encontrado para este recorte.</div>';
   }
   var showSetor = opts.showSetor!==false && currentSetor==='Todos';
   var showEsp = opts.showEsp!==false;
-  var countNote = rows.length+' médico(s) (ordenados por '+(opts.sortLabel||'volume')+'; role a lista para ver todos):';
+  var tableId = (rid||'phys')+'_physTable';
+  var sortInfo = miniSortState(expanded, tableId);
+  rows = miniSortedRows(rows, sortInfo);
+  var countNote = rows.length+' médico(s) (ordenados por '+(opts.sortLabel||'volume')+' por padrão; clique numa coluna para ordenar; role a lista para ver todos):';
   var html = '<div style="font-size:11.5px;color:var(--text-secondary);margin-bottom:4px">'+countNote+'</div>'+
     '<div class="tbl-wrap" style="max-height:340px;overflow-y:auto"><table class="dtable mini"><thead><tr>'+
-    '<th>Médico</th>'+(showEsp?'<th style="text-align:left">Especialidade</th>':'')+(showSetor?'<th style="text-align:left">Setor</th>':'')+'<th style="text-align:left">CAD</th>'+
-    '<th>TT Ant</th><th>TT Atual</th><th>EUF Ant</th><th>EUF Atual</th><th>Increm EUF</th>'+
+    miniTh('Médico','medico',tableId,sortInfo,true)+
+    (showEsp?miniTh('Especialidade','esp',tableId,sortInfo,true):'')+
+    (showSetor?miniTh('Setor','setor',tableId,sortInfo,true):'')+
+    miniTh('CAD','cad',tableId,sortInfo,true)+
+    miniTh('TT Ant','tt_ant',tableId,sortInfo)+miniTh('TT Atual','tt_atual',tableId,sortInfo)+
+    miniTh('EUF Ant','euf_ant',tableId,sortInfo)+miniTh('EUF Atual','euf_atual',tableId,sortInfo)+miniTh('Increm EUF','euf_incr',tableId,sortInfo)+
     '</tr></thead><tbody>';
   rows.forEach(function(p){
     html += '<tr>'+
@@ -660,13 +715,19 @@ function physicianMiniTable(rows, opts){
   return html;
 }
 
-function productMiniTable(rows){
+function productMiniTable(rows, row, expanded, rid){
   if(!rows || !rows.length){
     return '<div style="padding:4px 0;color:var(--text-secondary);font-size:12px">Nenhum produto encontrado.</div>';
   }
-  var html = '<div style="font-size:11.5px;color:var(--text-secondary);margin-bottom:4px">'+rows.length+' produto(s) prescrito(s) por este médico:</div>'+
+  var tableId = (rid||'prod')+'_prodTable';
+  var sortInfo = miniSortState(expanded, tableId);
+  rows = rows.map(function(p){ return Object.assign({}, p, {mercado_clean: cleanMercado(p.mercado)}); });
+  rows = miniSortedRows(rows, sortInfo);
+  var html = '<div style="font-size:11.5px;color:var(--text-secondary);margin-bottom:4px">'+rows.length+' produto(s) prescrito(s) por este médico (clique numa coluna para ordenar):</div>'+
     '<div class="tbl-wrap" style="max-height:340px;overflow-y:auto"><table class="dtable mini"><thead><tr>'+
-    '<th>Mercado</th><th style="text-align:left">Produto</th><th>TT Ant</th><th>TT Atual</th><th>EUF Ant</th><th>EUF Atual</th><th>Increm Mercado</th>'+
+    miniTh('Mercado','mercado_clean',tableId,sortInfo,true)+miniTh('Produto','produto',tableId,sortInfo,true)+
+    miniTh('TT Ant','tt_ant',tableId,sortInfo)+miniTh('TT Atual','tt_atual',tableId,sortInfo)+
+    miniTh('EUF Ant','euf_ant',tableId,sortInfo)+miniTh('EUF Atual','euf_atual',tableId,sortInfo)+miniTh('Increm Mercado','tt_incr',tableId,sortInfo)+
     '</tr></thead><tbody>';
   rows.forEach(function(p){
     html += '<tr>'+
@@ -680,13 +741,18 @@ function productMiniTable(rows){
   return html;
 }
 
-function auditProdutoMiniTable(rows){
+function auditProdutoMiniTable(rows, row, expanded, rid){
   if(!rows || !rows.length){
     return '<div style="padding:4px 0;color:var(--text-secondary);font-size:12px">Nenhum produto encontrado para este recorte.</div>';
   }
-  var html = '<div style="font-size:11.5px;color:var(--text-secondary);margin-bottom:4px">'+rows.length+' produto(s) neste setor:</div>'+
+  var tableId = (rid||'auditProd')+'_produtoTable';
+  var sortInfo = miniSortState(expanded, tableId);
+  rows = miniSortedRows(rows, sortInfo);
+  var html = '<div style="font-size:11.5px;color:var(--text-secondary);margin-bottom:4px">'+rows.length+' produto(s) neste setor (clique numa coluna para ordenar):</div>'+
     '<div class="tbl-wrap" style="max-height:340px;overflow-y:auto"><table class="dtable mini"><thead><tr>'+
-    '<th>Produto</th><th>TT Ant</th><th>TT Atual</th><th>Repres %</th><th>Increm</th><th>Evol Merc</th><th>EUF Ant</th><th>EUF Atual</th><th>Increm EUF</th><th>Evol EUF</th>'+
+    miniTh('Produto','produto',tableId,sortInfo,true)+miniTh('TT Ant','tt_ant',tableId,sortInfo)+miniTh('TT Atual','tt_atual',tableId,sortInfo)+miniTh('Repres %','repres',tableId,sortInfo)+
+    miniTh('Increm','tt_incr',tableId,sortInfo)+miniTh('Evol Merc','tt_evol',tableId,sortInfo)+miniTh('EUF Ant','euf_ant',tableId,sortInfo)+miniTh('EUF Atual','euf_atual',tableId,sortInfo)+
+    miniTh('Increm EUF','euf_incr',tableId,sortInfo)+miniTh('Evol EUF','euf_evol',tableId,sortInfo)+
     '</tr></thead><tbody>';
   rows.forEach(function(p){
     html += '<tr>'+
@@ -737,6 +803,10 @@ function filterNote(){
 // ================= build: Audit Pré-Visita (réplica fiel da aba dinâmica original) =================
 function buildAuditPrevisita(){
   var el = document.getElementById('panel-audit');
+  // shared across every render() call (médico/CRM search, ESP/Mercado/CAD filters, segmented
+  // Mercado buttons) so expand/collapse and mini-table sort state survive filter changes instead
+  // of collapsing every time the table is rebuilt from scratch
+  var auditExpanded = {};
   el.innerHTML = '<h2 class="h">Audit Pré-Visita'+filterNote()+'</h2>'+
     '<p class="desc">Réplica fiel da tabela dinâmica da aba <b>AUDIT PRÉ VISITA</b>: visão por Setor com detalhamento por Produto. Filtre por Médico e/ou CRM para localizar imediatamente a informação de auditoria de um médico específico &mdash; os demais filtros (Especialidade, Mercado, Cadastro) funcionam como os slicers da planilha original.</p>'+
     '<div class="searchbar" style="margin-bottom:14px">'+
@@ -876,7 +946,7 @@ function buildAuditPrevisita(){
         {key:'euf_evol', label:'Evol EUF', fmt:function(v){return v==null?'-':'<span class="'+signClass(v)+'">'+fmtPct(v)+'</span>';}},
       ],
       rows: rows, childKey:'produtos', childRenderer: auditProdutoMiniTable,
-      defaultSortKey:'tt_atual',
+      defaultSortKey:'tt_atual', expandedState: auditExpanded,
       totalRow: rows.length ? {
         setor:'Total Geral', tt_ant: totalAnt, tt_atual: grandTotalTT, repres: 1,
         tt_incr: grandTotalTT-totalAnt, tt_evol: totalAnt ? (grandTotalTT-totalAnt)/totalAnt : null,
@@ -1054,7 +1124,7 @@ function buildVisaoGeral(){
       {key:'evol_euf', label:'Evol EUF', fmt:function(v){return v==null?'-':'<span class="'+signClass(v)+'">'+fmtPct(v)+'</span>';}},
       {key:'repres', label:'Repres %', fmt:fmtPct},
     ],
-    rows: rowsWithChildren, childKey:'medicos', childRenderer:function(k){return physicianMiniTable(k,{showSetor:false});},
+    rows: rowsWithChildren, childKey:'medicos', childRenderer:function(k,row,expanded,rid){return physicianMiniTable(k,{showSetor:false},expanded,rid);},
     totalRow: currentSetor==='Todos' ? Object.assign({setor:'Total Geral'}, DATA.setor_total) : null,
     defaultSortKey:'tt_atual'
   }));
@@ -1100,7 +1170,7 @@ function buildEspecialidade(){
       {key:'evol_euf', label:'Evol EUF', fmt:function(v){return v==null?'-':'<span class="'+signClass(v)+'">'+fmtPct(v)+'</span>';}},
       {key:'repres', label:'Repres %', fmt:fmtPct},
     ],
-    rows: rowsWithChildren, childKey:'medicos', childRenderer:function(k){return physicianMiniTable(k);},
+    rows: rowsWithChildren, childKey:'medicos', childRenderer:function(k,row,expanded,rid){return physicianMiniTable(k,{},expanded,rid);},
     searchable:true, defaultSortKey:'tt_atual',
     totalRow: setorIdx==null ? Object.assign({esp:'Total Geral'}, DATA.esp_total) : null
   }));
@@ -1158,7 +1228,7 @@ function buildMarcas(){
       {key:'evol_euf', label:'Evol EUF', fmt:function(v){return v==null?'-':'<span class="'+signClass(v)+'">'+fmtPct(v)+'</span>';}},
       {key:'repres', label:'Repres %', fmt:fmtPct},
     ],
-    rows: rowsWithChildren, childKey:'medicos', childRenderer:function(k){return physicianMiniTable(k,{sortLabel:'maior queda de EUF'});},
+    rows: rowsWithChildren, childKey:'medicos', childRenderer:function(k,row,expanded,rid){return physicianMiniTable(k,{sortLabel:'maior queda de EUF'},expanded,rid);},
     searchable:true, defaultSortKey:'incr_euf', defaultSortDesc:false,
     totalRow: setorIdx==null ? Object.assign({produto:'Total Geral'}, DATA.marca_total) : null
   }));
