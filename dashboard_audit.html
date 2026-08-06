@@ -746,7 +746,6 @@ function buildAuditPrevisita(){
     '<label style="font-size:12.5px;color:var(--text-secondary)">Mercado: <select id="auditMercado"><option value="">Todos</option></select></label>'+
     '<label style="font-size:12.5px;color:var(--text-secondary)">CAD: <select id="auditCad"><option value="">Todos</option></select></label>'+
     '</div>'+
-    '<div id="auditMercadoSeg"></div>'+
     '<div id="auditBody"></div>';
 
   var medicoInp = el.querySelector('#auditMedico');
@@ -765,30 +764,31 @@ function buildAuditPrevisita(){
     var opt=document.createElement('option'); opt.value=i; opt.textContent=c; cadSel.appendChild(opt);
   });
 
-  var segWrap = el.querySelector('#auditMercadoSeg');
-  // once a médico/CRM search narrows to a small set of physicians, swap the global Mercado dropdown
-  // for a segmented control listing only the mercados that médico actually has prescriptions in
-  function renderMercadoSeg(crmSet, mercadoIdx){
-    if(!crmSet || crmSet.size===0 || crmSet.size>8){ segWrap.innerHTML = ''; return; }
+  // once a médico/CRM search narrows to a small set of physicians (the same set shown by the
+  // "Médico(s) encontrado(s)" note), build a segmented control listing only the mercados that
+  // médico actually has prescriptions in, to be inserted right below that note.
+  function buildMercadoSegEl(crmSet, mercadoIdx){
+    if(!crmSet || crmSet.size===0 || crmSet.size>5) return null;
     var mercadoIdxSet = new Set();
     crmSet.forEach(function(crmIdx){
       (PRESCRICOES_BY_CRM[crmIdx]||[]).forEach(function(p){ mercadoIdxSet.add(p[PRE.MERCADO]); });
     });
     var opts = Array.from(mercadoIdxSet).map(function(i){ return {i:i, label:cleanMercado(DATA.dims.Mercado[i])}; })
       .sort(function(a,b){ return a.label.localeCompare(b.label); });
-    if(!opts.length){ segWrap.innerHTML = ''; return; }
-    var html = '<div style="font-size:11.5px;color:var(--text-secondary);margin:2px 0 6px">Filtrar por Mercado (deste médico):</div>'+
+    if(!opts.length) return null;
+    var wrap = document.createElement('div'); wrap.style.marginTop = '10px';
+    wrap.innerHTML = '<div style="font-size:11.5px;color:var(--text-secondary);margin:2px 0 6px">Filtrar por Mercado (deste médico):</div>'+
       '<div class="seg-group" role="group" aria-label="Filtrar por Mercado">'+
       '<button type="button" class="seg-btn'+(mercadoIdx==null?' active':'')+'" data-mv="">Todos</button>'+
       opts.map(function(o){ return '<button type="button" class="seg-btn'+(mercadoIdx===o.i?' active':'')+'" data-mv="'+o.i+'">'+esc(o.label)+'</button>'; }).join('')+
       '</div>';
-    segWrap.innerHTML = html;
-    segWrap.querySelectorAll('.seg-btn').forEach(function(btn){
+    wrap.querySelectorAll('.seg-btn').forEach(function(btn){
       btn.addEventListener('click', function(){
         mercadoSel.value = btn.getAttribute('data-mv');
         render();
       });
     });
+    return wrap;
   }
 
   var debounceTimer = null;
@@ -812,8 +812,6 @@ function buildAuditPrevisita(){
         if(nameMatch && crmMatch) crmSet.add(i);
       });
     }
-
-    renderMercadoSeg(crmSet, mercadoIdx);
 
     var body = el.querySelector('#auditBody');
     body.innerHTML = '';
@@ -856,6 +854,8 @@ function buildAuditPrevisita(){
         return esc(DATA.crm_name[i])+' &mdash; CRM '+esc(DATA.crm_list[i])+' &mdash; '+esc(niceName(DATA.dims.Setor[DATA.physicians[i][PHY.SETOR]]))+' / '+esc(DATA.dims.ESP[DATA.physicians[i][PHY.ESP]]);
       }).join('<br>');
       body.appendChild(note);
+      var segEl = buildMercadoSegEl(crmSet, mercadoIdx);
+      if(segEl) body.appendChild(segEl);
     }
 
     var card = document.createElement('div'); card.className='card';
