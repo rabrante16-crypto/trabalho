@@ -593,6 +593,60 @@ function physiciansIn(attr, keyLabel, setorFilterIdx, limit){
   return limit ? out.slice(0, limit) : out;
 }
 
+// aggregate DATA.prescricoes by ESP (via each row's physician), filtered to a Mercado set and
+// optionally a Setor -- used by Ranking Especialidade to rank specialties within one mercado
+function especialidadesForMercado(setorIdx, mercadoSet){
+  var byEsp = {};
+  var crmSeen = new Set();
+  var grand = {tt_ant:0,tt_atual:0,euf_ant:0,euf_atual:0};
+  DATA.prescricoes.forEach(function(p){
+    if(mercadoSet && !mercadoSet.has(p[PRE.MERCADO])) return;
+    var crmIdx = p[PRE.CRM];
+    var phy = DATA.physicians[crmIdx];
+    if(setorIdx!=null && phy[PHY.SETOR]!==setorIdx) return;
+    crmSeen.add(crmIdx);
+    var espIdx = phy[PHY.ESP];
+    var e = byEsp[espIdx]; if(!e){ e={tt_ant:0,tt_atual:0,euf_ant:0,euf_atual:0}; byEsp[espIdx]=e; }
+    e.tt_ant+=p[PRE.TT_ANT]; e.tt_atual+=p[PRE.TT_ATUAL]; e.euf_ant+=p[PRE.EUF_ANT]; e.euf_atual+=p[PRE.EUF_ATUAL];
+    grand.tt_ant+=p[PRE.TT_ANT]; grand.tt_atual+=p[PRE.TT_ATUAL]; grand.euf_ant+=p[PRE.EUF_ANT]; grand.euf_atual+=p[PRE.EUF_ATUAL];
+  });
+  function toEspRow(espLabel, e){
+    var agg = makeAgg(e.tt_ant, e.tt_atual, e.euf_ant, e.euf_atual);
+    return {
+      esp: espLabel, tt_ant: agg.tt_ant, tt_atual: agg.tt_atual,
+      incr_merc: agg.tt_incr, evol_merc: agg.tt_evol,
+      euf_ant: agg.euf_ant, euf_atual: agg.euf_atual,
+      incr_euf: agg.euf_incr, evol_euf: agg.euf_evol,
+      repres: grand.tt_atual ? e.tt_atual/grand.tt_atual : 0,
+    };
+  }
+  var rows = Object.keys(byEsp).map(function(k){ return toEspRow(DATA.dims.ESP[k], byEsp[k]); });
+  var total = toEspRow('Total Geral', grand); total.repres = 1;
+  return {rows: rows, total: total, nMedicos: crmSeen.size};
+}
+
+// médicos of a given ESP, filtered to a Mercado set (and optional Setor) -- for the Ranking
+// Especialidade drill-down when a Mercado search narrows the whole view to one/few mercados
+function physiciansInMercadoForEsp(espIdx, setorIdx, mercadoSet, limit){
+  var map = {};
+  DATA.prescricoes.forEach(function(p){
+    if(mercadoSet && !mercadoSet.has(p[PRE.MERCADO])) return;
+    var crmIdx = p[PRE.CRM];
+    var phy = DATA.physicians[crmIdx];
+    if(phy[PHY.ESP]!==espIdx) return;
+    if(setorIdx!=null && phy[PHY.SETOR]!==setorIdx) return;
+    var e = map[crmIdx]; if(!e){ e=[0,0,0,0]; map[crmIdx]=e; }
+    e[0]+=p[PRE.TT_ANT]; e[1]+=p[PRE.TT_ATUAL]; e[2]+=p[PRE.EUF_ANT]; e[3]+=p[PRE.EUF_ATUAL];
+  });
+  var out = [];
+  Object.keys(map).forEach(function(k){
+    var crmIdx=+k, v=map[k];
+    out.push(physicianRow(crmIdx, makeAgg(v[0],v[1],v[2],v[3])));
+  });
+  out.sort(function(a,b){return b.tt_atual-a.tt_atual;});
+  return limit ? out.slice(0, limit) : out;
+}
+
 // physicians who prescribe a given Produto (EUF brand or competitor), optionally filtered to a Setor
 // NOTE: a Produto can appear under more than one Mercado sub-form for the same physician
 // (e.g. comprimido vs suspensão) as separate BASE AUDIT rows -- these must be summed per CRM,
@@ -708,7 +762,12 @@ function physicianMiniTable(rows, opts, expanded, rid){
   }
   var showSetor = opts.showSetor!==false && currentSetor==='Todos';
   var showEsp = opts.showEsp!==false;
+  // optional 2nd drill-down level: click a médico row to see the produtos (SKU) they prescribe,
+  // narrowed to opts.mercadoSet when a Mercado search is active (Ranking Especialidade)
+  var expandProdutos = !!opts.expandProdutos;
+  var mercadoSet = opts.mercadoSet || null;
   var tableId = (rid||'phys')+'_physTable';
+  var colCount = 1+(showEsp?1:0)+(showSetor?1:0)+1+5;
   var sortInfo = miniSortState(expanded, tableId);
   rows = miniSortedRows(rows, sortInfo);
   var countNote = rows.length+' médico(s) (ordenados por '+(opts.sortLabel||'volume')+' por padrão; clique numa coluna para ordenar; role a lista para ver todos):';
@@ -722,14 +781,29 @@ function physicianMiniTable(rows, opts, expanded, rid){
     miniTh('EUF Ant','euf_ant',tableId,sortInfo)+miniTh('EUF Atual','euf_atual',tableId,sortInfo)+miniTh('Increm EUF','euf_incr',tableId,sortInfo)+
     '</tr></thead><tbody>';
   rows.forEach(function(p){
+    var subRid = null, isOpen = false;
+    if(expandProdutos){
+      subRid = (rid||'phys')+'_med_'+String(p.crm).replace(/[^a-z0-9]/gi,'');
+      isOpen = !!expanded[subRid];
+    }
+    var medicoCell = expandProdutos
+      ? '<span class="expand-btn" data-rid="'+subRid+'">'+(isOpen?'▼':'▶')+'</span>'+esc(p.medico)
+      : esc(p.medico);
     html += '<tr>'+
-      '<td style="text-align:left">'+esc(p.medico)+'</td>'+
+      '<td style="text-align:left">'+medicoCell+'</td>'+
       (showEsp?'<td style="text-align:left">'+esc(p.esp)+'</td>':'')+
       (showSetor?'<td style="text-align:left">'+esc(niceName(p.setor))+'</td>':'')+
       '<td style="text-align:left">'+esc(p.cad)+'</td>'+
       '<td>'+fmtInt(p.tt_ant)+'</td><td>'+fmtInt(p.tt_atual)+'</td><td>'+fmtInt(p.euf_ant)+'</td><td>'+fmtInt(p.euf_atual)+'</td>'+
       '<td><span class="'+signClass(p.euf_incr)+'">'+fmtSignedInt(p.euf_incr)+'</span></td>'+
       '</tr>';
+    if(expandProdutos && isOpen){
+      var produtos = productsOf(DATA.crm_list.indexOf(p.crm));
+      if(mercadoSet) produtos = produtos.filter(function(pr){ return mercadoSet.has(pr.mercadoIdx); });
+      html += '<tr class="child-detail"><td colspan="'+colCount+'">'+
+        productMiniTable(produtos, p, expanded, subRid, {hideMercado: !!mercadoSet}) +
+        '</td></tr>';
+    }
   });
   html += '</tbody></table></div>';
   return html;
@@ -1157,46 +1231,107 @@ function buildVisaoGeral(){
 function buildEspecialidade(){
   var el = document.getElementById('panel-esp');
   var setorIdx = setorIdxOf(currentSetor);
-  var especialidades = setorIdx==null ? DATA.especialidades : aggregatePhysiciansBy('ESP', setorIdx).map(function(a){
-    return { esp:a.key, tt_ant:a.tt_ant, tt_atual:a.tt_atual, incr_merc:a.tt_incr, evol_merc:a.tt_evol,
-      euf_ant:a.euf_ant, euf_atual:a.euf_atual, incr_euf:a.euf_incr, evol_euf:a.euf_evol,
-      repres: 0 };
-  });
-  var totReaisBase = setorIdx==null ? DATA.esp_total.tt_atual : especialidades.reduce(function(s,e){return s+e.tt_atual;},0);
-  especialidades.forEach(function(e){ e.repres = totReaisBase ? e.tt_atual/totReaisBase : 0; });
+  // shared across every render() (Mercado search) so expand/collapse and mini-table sort state
+  // survive the search instead of collapsing on every keystroke
+  var espExpanded = {};
 
   el.innerHTML = '<h2 class="h">Ranking por Especialidade'+filterNote()+'</h2>'+
-    '<p class="desc">Especialidades médicas ordenadas por prescrições de mercado. Fonte: aba <b>RANKING ESPECIALIDADE</b>.</p>';
+    '<p class="desc">Especialidades médicas ordenadas por prescrições de mercado. Busque por Mercado para ver o ranqueamento das especialidades dentro de um mercado específico. Fonte: aba <b>RANKING ESPECIALIDADE</b>.</p>'+
+    '<div class="searchbar" style="margin-bottom:14px">'+
+    '<label style="font-size:12.5px;color:var(--text-secondary)">Mercado: <input type="search" id="espMercado" placeholder="Buscar mercado..." style="min-width:220px"></label>'+
+    '</div>'+
+    '<div id="espBody"></div>';
 
-  var card = document.createElement('div'); card.className='card';
-  card.innerHTML = '<h2 class="h" style="margin-top:0">Top 12 especialidades por prescrições de mercado (atual)</h2>';
-  var top = especialidades.slice().sort(function(a,b){return b.tt_atual-a.tt_atual;}).slice(0,12)
-    .map(function(e){return {label:e.esp, value:e.tt_atual};});
-  card.appendChild(topBar(top, {formatter:fmtInt, color:'var(--s1)'}));
-  el.appendChild(card);
+  var mercadoInp = el.querySelector('#espMercado');
+  var debounceTimer = null;
+  function scheduleRender(){ clearTimeout(debounceTimer); debounceTimer = setTimeout(render, 150); }
 
-  var card2 = document.createElement('div'); card2.className='card';
-  card2.innerHTML = '<h2 class="h" style="margin-top:0">Todas as especialidades</h2><p class="desc">Clique na seta para ver os principais médicos daquela especialidade.</p>';
-  var rowsWithChildren = especialidades.map(function(e){
-    return Object.assign({}, e, {medicos: physiciansIn('ESP', e.esp, setorIdx, 60)});
-  });
-  card2.appendChild(buildTable({
-    columns:[
-      {key:'esp', label:'Especialidade', fmt:function(v){return esc(v);}},
-      {key:'tt_ant', label:'TT Ant', fmt:fmtInt},
-      {key:'tt_atual', label:'TT Atual', fmt:fmtInt},
-      {key:'incr_merc', label:'Increm Merc', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtSignedInt(v)+'</span>';}},
-      {key:'evol_merc', label:'Evol Merc', fmt:function(v){return v==null?'-':'<span class="'+signClass(v)+'">'+fmtPct(v)+'</span>';}},
-      {key:'euf_atual', label:'EUF Atual', fmt:fmtInt},
-      {key:'incr_euf', label:'Increm EUF', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtSignedInt(v)+'</span>';}},
-      {key:'evol_euf', label:'Evol EUF', fmt:function(v){return v==null?'-':'<span class="'+signClass(v)+'">'+fmtPct(v)+'</span>';}},
-      {key:'repres', label:'Repres %', fmt:fmtPct},
-    ],
-    rows: rowsWithChildren, childKey:'medicos', childRenderer:function(k,row,expanded,rid){return physicianMiniTable(k,{},expanded,rid);},
-    searchable:true, defaultSortKey:'tt_atual',
-    totalRow: setorIdx==null ? Object.assign({esp:'Total Geral'}, DATA.esp_total) : null
-  }));
-  el.appendChild(card2);
+  function render(){
+    var mercadoQuery = mercadoInp.value.trim().toLowerCase();
+    var mercadoSet = null;
+    if(mercadoQuery){
+      mercadoSet = new Set();
+      DATA.dims.Mercado.forEach(function(m,i){ if(cleanMercado(m).toLowerCase().indexOf(mercadoQuery)>-1) mercadoSet.add(i); });
+    }
+
+    var body = el.querySelector('#espBody');
+    body.innerHTML = '';
+
+    if(mercadoSet && mercadoSet.size===0){
+      body.innerHTML = '<div class="note">Nenhum mercado encontrado para a busca informada.</div>';
+      return;
+    }
+
+    var especialidades, totalRowData, nMedicos;
+    if(mercadoSet){
+      var comp = especialidadesForMercado(setorIdx, mercadoSet);
+      especialidades = comp.rows; totalRowData = comp.total; nMedicos = comp.nMedicos;
+    } else if(setorIdx==null){
+      especialidades = DATA.especialidades.slice();
+      totalRowData = DATA.esp_total; nMedicos = null;
+    } else {
+      especialidades = aggregatePhysiciansBy('ESP', setorIdx).map(function(a){
+        return { esp:a.key, tt_ant:a.tt_ant, tt_atual:a.tt_atual, incr_merc:a.tt_incr, evol_merc:a.tt_evol,
+          euf_ant:a.euf_ant, euf_atual:a.euf_atual, incr_euf:a.euf_incr, evol_euf:a.euf_evol, repres: 0 };
+      });
+      var totBase = especialidades.reduce(function(s,e){return s+e.tt_atual;},0);
+      especialidades.forEach(function(e){ e.repres = totBase ? e.tt_atual/totBase : 0; });
+      totalRowData = null; nMedicos = null;
+    }
+
+    if(mercadoSet && mercadoSet.size<=8){
+      var note = document.createElement('div'); note.className='note'; note.style.marginBottom='12px';
+      note.innerHTML = '<b>Mercado(s):</b> '+Array.from(mercadoSet).map(function(i){return esc(cleanMercado(DATA.dims.Mercado[i]));}).join(', ');
+      body.appendChild(note);
+    }
+
+    if(nMedicos!=null){
+      var kpiWrap = document.createElement('div'); kpiWrap.className='grid-kpi';
+      var tile = document.createElement('div'); tile.className='tile';
+      tile.innerHTML = '<div class="label">Médicos no recorte</div><div class="value">'+fmtInt(nMedicos)+'</div>';
+      kpiWrap.appendChild(tile);
+      body.appendChild(kpiWrap);
+    }
+
+    var card = document.createElement('div'); card.className='card';
+    card.innerHTML = '<h2 class="h" style="margin-top:0">Top 12 especialidades por prescrições de mercado (atual)</h2>';
+    var top = especialidades.slice().sort(function(a,b){return b.tt_atual-a.tt_atual;}).slice(0,12)
+      .map(function(e){return {label:e.esp, value:e.tt_atual};});
+    card.appendChild(topBar(top, {formatter:fmtInt, color:'var(--s1)'}));
+    body.appendChild(card);
+
+    var card2 = document.createElement('div'); card2.className='card';
+    card2.innerHTML = '<h2 class="h" style="margin-top:0">Todas as especialidades</h2>'+
+      '<p class="desc">Clique na seta para ver os médicos daquela especialidade'+(mercadoSet?' neste mercado':'')+'. Clique na seta de um médico para ver os produtos (SKU) que ele prescreve.</p>';
+    var rowsWithChildren = especialidades.map(function(e){
+      var espIdx = DATA.dims.ESP.indexOf(e.esp);
+      var medicos = mercadoSet ? physiciansInMercadoForEsp(espIdx, setorIdx, mercadoSet, 60) : physiciansIn('ESP', e.esp, setorIdx, 60);
+      return Object.assign({}, e, {medicos: medicos});
+    });
+    card2.appendChild(buildTable({
+      columns:[
+        {key:'esp', label:'Especialidade', fmt:function(v){return esc(v);}},
+        {key:'tt_ant', label:'TT Ant', fmt:fmtInt},
+        {key:'tt_atual', label:'TT Atual', fmt:fmtInt},
+        {key:'incr_merc', label:'Increm Merc', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtSignedInt(v)+'</span>';}},
+        {key:'evol_merc', label:'Evol Merc', fmt:function(v){return v==null?'-':'<span class="'+signClass(v)+'">'+fmtPct(v)+'</span>';}},
+        {key:'euf_atual', label:'EUF Atual', fmt:fmtInt},
+        {key:'incr_euf', label:'Increm EUF', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtSignedInt(v)+'</span>';}},
+        {key:'evol_euf', label:'Evol EUF', fmt:function(v){return v==null?'-':'<span class="'+signClass(v)+'">'+fmtPct(v)+'</span>';}},
+        {key:'repres', label:'Repres %', fmt:fmtPct},
+      ],
+      rows: rowsWithChildren, childKey:'medicos',
+      childRenderer:function(k,row,expanded,rid){
+        return physicianMiniTable(k,{showEsp:false, expandProdutos:true, mercadoSet:mercadoSet},expanded,rid);
+      },
+      defaultSortKey:'tt_atual', expandedState: espExpanded,
+      totalRow: totalRowData ? Object.assign({esp:'Total Geral'}, totalRowData) : null
+    }));
+    body.appendChild(card2);
+  }
+
+  mercadoInp.addEventListener('input', scheduleRender);
+  render();
 }
 
 // ================= build: Deixaram de Prescrever (por marca EUF) =================
