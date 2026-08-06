@@ -11,7 +11,7 @@
     --text-primary:#0b0b0b; --text-secondary:#52514e; --text-muted:#898781;
     --grid:#e1e0d9; --baseline:#c3c2b7; --border:rgba(11,11,11,0.10);
     --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100; --s5:#e87ba4; --s6:#008300; --s7:#4a3aa7; --s8:#e34948;
-    --good:#006300; --bad:#c62828;
+    --good:#006300; --bad:#c62828; --babyblue:#1f8fd6;
     --chip-bg:#f0efec;
   }
   @media (prefers-color-scheme: dark){
@@ -21,7 +21,7 @@
       --text-primary:#ffffff; --text-secondary:#c3c2b7; --text-muted:#898781;
       --grid:#2c2c2a; --baseline:#383835; --border:rgba(255,255,255,0.10);
       --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#008300; --s7:#9085e9; --s8:#e66767;
-      --good:#0ca30c; --bad:#e66767;
+      --good:#0ca30c; --bad:#e66767; --babyblue:#7ec8f2;
       --chip-bg:#2a2a28;
     }
   }
@@ -31,7 +31,7 @@
     --text-primary:#ffffff; --text-secondary:#c3c2b7; --text-muted:#898781;
     --grid:#2c2c2a; --baseline:#383835; --border:rgba(255,255,255,0.10);
     --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#008300; --s7:#9085e9; --s8:#e66767;
-    --good:#0ca30c; --bad:#e66767;
+    --good:#0ca30c; --bad:#e66767; --babyblue:#7ec8f2;
     --chip-bg:#2a2a28;
   }
   *{box-sizing:border-box;}
@@ -107,6 +107,11 @@
     z-index:50;display:none;line-height:1.5;
   }
   .badge{display:inline-block;padding:1px 7px;border-radius:20px;font-size:11px;background:var(--chip-bg);color:var(--text-secondary);}
+  .produto-euf{color:var(--babyblue);font-weight:600;}
+  .seg-group{display:inline-flex;flex-wrap:wrap;gap:4px;background:var(--chip-bg);border-radius:10px;padding:4px;}
+  .seg-btn{border:none;background:transparent;color:var(--text-secondary);font-size:12px;padding:5px 10px;border-radius:7px;cursor:pointer;font-family:inherit;white-space:nowrap;}
+  .seg-btn:hover{color:var(--text-primary);}
+  .seg-btn.active{background:var(--surface-3);color:var(--text-primary);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.12);}
   @keyframes barPulse{0%,100%{filter:drop-shadow(0 0 0px var(--glow-color,var(--s4)));}50%{filter:drop-shadow(0 0 5px var(--glow-color,var(--s4)));}}
   @keyframes badgeIn{from{opacity:0;transform:translateX(-4px);}to{opacity:1;transform:translateX(0);}}
   @keyframes lineAppear{from{opacity:0;}to{opacity:1;}}
@@ -167,6 +172,9 @@ function fmtPct(v){ if(v==null||isNaN(v)) return '-'; return (v*100).toLocaleStr
 function signClass(v){ return v>0?'pos':(v<0?'neg':''); }
 function fmtSignedInt(v){ return (v>0?'+':'')+fmtInt(v); }
 function esc(s){ return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+// Produto/Marca names ending in "EUF" are Eurofarma's own brands (vs. competitor SKUs) -> highlighted in baby blue everywhere they're listed
+function isEufProduto(s){ return /\bEUF$/i.test(String(s||'').trim()); }
+function escProduto(s){ var t = esc(s); return isEufProduto(s) ? '<span class="produto-euf">'+t+'</span>' : t; }
 var _measureCtx = document.createElement('canvas').getContext('2d');
 _measureCtx.font = '12px system-ui,-apple-system,"Segoe UI",sans-serif';
 function truncateToWidth(s, maxWidth){
@@ -663,7 +671,7 @@ function productMiniTable(rows){
   rows.forEach(function(p){
     html += '<tr>'+
       '<td style="text-align:left">'+esc(cleanMercado(p.mercado))+'</td>'+
-      '<td style="text-align:left">'+esc(p.produto)+'</td>'+
+      '<td style="text-align:left">'+escProduto(p.produto)+'</td>'+
       '<td>'+fmtInt(p.tt_ant)+'</td><td>'+fmtInt(p.tt_atual)+'</td><td>'+fmtInt(p.euf_ant)+'</td><td>'+fmtInt(p.euf_atual)+'</td>'+
       '<td><span class="'+signClass(p.tt_incr)+'">'+fmtSignedInt(p.tt_incr)+'</span></td>'+
       '</tr>';
@@ -682,7 +690,7 @@ function auditProdutoMiniTable(rows){
     '</tr></thead><tbody>';
   rows.forEach(function(p){
     html += '<tr>'+
-      '<td style="text-align:left">'+esc(p.produto)+'</td>'+
+      '<td style="text-align:left">'+escProduto(p.produto)+'</td>'+
       '<td>'+fmtInt(p.tt_ant)+'</td><td>'+fmtInt(p.tt_atual)+'</td><td>'+fmtPct(p.repres)+'</td>'+
       '<td><span class="'+signClass(p.tt_incr)+'">'+fmtSignedInt(p.tt_incr)+'</span></td>'+
       '<td>'+(p.tt_evol==null?'-':'<span class="'+signClass(p.tt_evol)+'">'+fmtPct(p.tt_evol)+'</span>')+'</td>'+
@@ -738,6 +746,7 @@ function buildAuditPrevisita(){
     '<label style="font-size:12.5px;color:var(--text-secondary)">Mercado: <select id="auditMercado"><option value="">Todos</option></select></label>'+
     '<label style="font-size:12.5px;color:var(--text-secondary)">CAD: <select id="auditCad"><option value="">Todos</option></select></label>'+
     '</div>'+
+    '<div id="auditMercadoSeg"></div>'+
     '<div id="auditBody"></div>';
 
   var medicoInp = el.querySelector('#auditMedico');
@@ -755,6 +764,32 @@ function buildAuditPrevisita(){
   DATA.dims.CAD.forEach(function(c,i){
     var opt=document.createElement('option'); opt.value=i; opt.textContent=c; cadSel.appendChild(opt);
   });
+
+  var segWrap = el.querySelector('#auditMercadoSeg');
+  // once a médico/CRM search narrows to a small set of physicians, swap the global Mercado dropdown
+  // for a segmented control listing only the mercados that médico actually has prescriptions in
+  function renderMercadoSeg(crmSet, mercadoIdx){
+    if(!crmSet || crmSet.size===0 || crmSet.size>8){ segWrap.innerHTML = ''; return; }
+    var mercadoIdxSet = new Set();
+    crmSet.forEach(function(crmIdx){
+      (PRESCRICOES_BY_CRM[crmIdx]||[]).forEach(function(p){ mercadoIdxSet.add(p[PRE.MERCADO]); });
+    });
+    var opts = Array.from(mercadoIdxSet).map(function(i){ return {i:i, label:cleanMercado(DATA.dims.Mercado[i])}; })
+      .sort(function(a,b){ return a.label.localeCompare(b.label); });
+    if(!opts.length){ segWrap.innerHTML = ''; return; }
+    var html = '<div style="font-size:11.5px;color:var(--text-secondary);margin:2px 0 6px">Filtrar por Mercado (deste médico):</div>'+
+      '<div class="seg-group" role="group" aria-label="Filtrar por Mercado">'+
+      '<button type="button" class="seg-btn'+(mercadoIdx==null?' active':'')+'" data-mv="">Todos</button>'+
+      opts.map(function(o){ return '<button type="button" class="seg-btn'+(mercadoIdx===o.i?' active':'')+'" data-mv="'+o.i+'">'+esc(o.label)+'</button>'; }).join('')+
+      '</div>';
+    segWrap.innerHTML = html;
+    segWrap.querySelectorAll('.seg-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        mercadoSel.value = btn.getAttribute('data-mv');
+        render();
+      });
+    });
+  }
 
   var debounceTimer = null;
   function scheduleRender(){ clearTimeout(debounceTimer); debounceTimer = setTimeout(render, 150); }
@@ -777,6 +812,8 @@ function buildAuditPrevisita(){
         if(nameMatch && crmMatch) crmSet.add(i);
       });
     }
+
+    renderMercadoSeg(crmSet, mercadoIdx);
 
     var body = el.querySelector('#auditBody');
     body.innerHTML = '';
@@ -936,7 +973,7 @@ function buildDeixaramPrescrever(){
     });
     card.appendChild(buildTable({
       columns:[
-        {key:'produto', label:'Marca', fmt:function(v){return esc(v);}},
+        {key:'produto', label:'Marca', fmt:function(v){return escProduto(v);}},
         {key:'euf_ant', label:'EUF Ant', fmt:fmtInt},
         {key:'euf_atual', label:'EUF Atual', fmt:fmtInt},
         {key:'incr_euf', label:'Increm EUF', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtSignedInt(v)+'</span>';}},
@@ -1114,7 +1151,7 @@ function buildMarcas(){
   });
   card2.appendChild(buildTable({
     columns:[
-      {key:'produto', label:'Marca', fmt:function(v){return esc(v);}},
+      {key:'produto', label:'Marca', fmt:function(v){return escProduto(v);}},
       {key:'euf_ant', label:'EUF Ant', fmt:fmtInt},
       {key:'euf_atual', label:'EUF Atual', fmt:fmtInt},
       {key:'incr_euf', label:'Increm EUF', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtSignedInt(v)+'</span>';}},
@@ -1174,7 +1211,7 @@ function buildPrescritores(){
 
     if((produtoSet && produtoSet.size<=8) || (mercadoSet && mercadoSet.size<=8)){
       var noteParts = [];
-      if(produtoSet && produtoSet.size<=8) noteParts.push('<b>Produto(s):</b> '+Array.from(produtoSet).map(function(i){return esc(DATA.dims.Produto[i]);}).join(', '));
+      if(produtoSet && produtoSet.size<=8) noteParts.push('<b>Produto(s):</b> '+Array.from(produtoSet).map(function(i){return escProduto(DATA.dims.Produto[i]);}).join(', '));
       if(mercadoSet && mercadoSet.size<=8) noteParts.push('<b>Mercado(s):</b> '+Array.from(mercadoSet).map(function(i){return esc(cleanMercado(DATA.dims.Mercado[i]));}).join(', '));
       var note = document.createElement('div'); note.className='note'; note.style.marginBottom='12px';
       note.innerHTML = noteParts.join('<br>');
@@ -1381,7 +1418,7 @@ function buildInsights(){
   cardMarcaP.innerHTML = '<h2 class="h" style="margin-top:0">Marcas prioritárias</h2><p class="desc">Maior queda de prescrição EUF.</p>';
   cardMarcaP.appendChild(buildTable({
     columns:[
-      {key:'produto', label:'Marca', fmt:function(v){return esc(v);}},
+      {key:'produto', label:'Marca', fmt:function(v){return escProduto(v);}},
       {key:'evol_euf', label:'Evol EUF', fmt:function(v){return v==null?'-':'<span class="'+signClass(v)+'">'+fmtPct(v)+'</span>';}},
       {key:'incr_euf', label:'Increm EUF', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtSignedInt(v)+'</span>';}},
       {key:'acao', label:'Ação sugerida', headAlign:'left', fmt:function(v){return '<span style="white-space:normal;display:block;max-width:260px;text-align:left">'+esc(v)+'</span>';}},
@@ -1395,7 +1432,7 @@ function buildInsights(){
   cardMarcaD.innerHTML = '<h2 class="h" style="margin-top:0">Marcas em destaque</h2><p class="desc">Maior crescimento de prescrição EUF.</p>';
   cardMarcaD.appendChild(buildTable({
     columns:[
-      {key:'produto', label:'Marca', fmt:function(v){return esc(v);}},
+      {key:'produto', label:'Marca', fmt:function(v){return escProduto(v);}},
       {key:'evol_euf', label:'Evol EUF', fmt:function(v){return v==null?'-':'<span class="'+signClass(v)+'">'+fmtPct(v)+'</span>';}},
       {key:'incr_euf', label:'Increm EUF', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtSignedInt(v)+'</span>';}},
       {key:'acao', label:'Ação sugerida', headAlign:'left', fmt:function(v){return '<span style="white-space:normal;display:block;max-width:260px;text-align:left">'+esc(v)+'</span>';}},
