@@ -1293,13 +1293,6 @@ function buildEspecialidade(){
       body.appendChild(kpiWrap);
     }
 
-    var card = document.createElement('div'); card.className='card';
-    card.innerHTML = '<h2 class="h" style="margin-top:0">Top 12 especialidades por prescrições de mercado (atual)</h2>';
-    var top = especialidades.slice().sort(function(a,b){return b.tt_atual-a.tt_atual;}).slice(0,12)
-      .map(function(e){return {label:e.esp, value:e.tt_atual};});
-    card.appendChild(topBar(top, {formatter:fmtInt, color:'var(--s1)'}));
-    body.appendChild(card);
-
     var card2 = document.createElement('div'); card2.className='card';
     card2.innerHTML = '<h2 class="h" style="margin-top:0">Todas as especialidades</h2>'+
       '<p class="desc">Clique na seta para ver os médicos daquela especialidade'+(mercadoSet?' neste mercado':'')+'. Clique na seta de um médico para ver os produtos (SKU) que ele prescreve.</p>';
@@ -1328,6 +1321,13 @@ function buildEspecialidade(){
       totalRow: totalRowData ? Object.assign({esp:'Total Geral'}, totalRowData) : null
     }));
     body.appendChild(card2);
+
+    var card3 = document.createElement('div'); card3.className='card';
+    card3.innerHTML = '<h2 class="h" style="margin-top:0">Top 12 especialidades por prescrições de mercado (atual)</h2>';
+    var top = especialidades.slice().sort(function(a,b){return b.tt_atual-a.tt_atual;}).slice(0,12)
+      .map(function(e){return {label:e.esp, value:e.tt_atual};});
+    card3.appendChild(topBar(top, {formatter:fmtInt, color:'var(--s1)'}));
+    body.appendChild(card3);
   }
 
   mercadoInp.addEventListener('input', scheduleRender);
