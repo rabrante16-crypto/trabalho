@@ -395,6 +395,7 @@ function buildTable(opts){
   var sortKey = opts.defaultSortKey || null;
   var sortDesc = opts.defaultSortDesc!==false;
   var expanded = opts.expandedState || {};
+  var searchFocusPending = false;
 
   function matches(row){
     if(!searchVal) return true;
@@ -464,7 +465,20 @@ function buildTable(opts){
 
     if(opts.searchable){
       var inp = box.querySelector('#'+opts._id+'_search');
-      inp.addEventListener('input', function(){ searchVal = inp.value; render(); inp.focus(); inp.setSelectionRange(inp.value.length,inp.value.length); });
+      // rebuilding box.innerHTML on every keystroke replaces this <input> with a fresh node,
+      // so the browser drops focus (and dismisses the on-screen keyboard on mobile) unless we
+      // explicitly refocus the NEW node right after render() recreates it -- refocusing the old
+      // (now detached) `inp` reference here would silently no-op.
+      if(searchFocusPending){
+        searchFocusPending = false;
+        inp.focus();
+        inp.setSelectionRange(inp.value.length, inp.value.length);
+      }
+      inp.addEventListener('input', function(){
+        searchVal = inp.value;
+        searchFocusPending = true;
+        render();
+      });
     }
     box.querySelectorAll('th[data-k]').forEach(function(th){
       th.addEventListener('click', function(){
@@ -674,6 +688,8 @@ function productsOf(crmIdx){
   var rows = PRESCRICOES_BY_CRM[crmIdx] || [];
   return rows.map(function(p){
     var agg = makeAgg(p[PRE.TT_ANT],p[PRE.TT_ATUAL],p[PRE.EUF_ANT],p[PRE.EUF_ATUAL]);
+    agg.mercadoIdx = p[PRE.MERCADO];
+    agg.produtoIdx = p[PRE.PRODUTO];
     agg.mercado = DATA.dims.Mercado[p[PRE.MERCADO]];
     agg.produto = DATA.dims.Produto[p[PRE.PRODUTO]];
     return agg;
@@ -715,23 +731,25 @@ function physicianMiniTable(rows, opts, expanded, rid){
   return html;
 }
 
-function productMiniTable(rows, row, expanded, rid){
+function productMiniTable(rows, row, expanded, rid, miniOpts){
+  miniOpts = miniOpts || {};
   if(!rows || !rows.length){
-    return '<div style="padding:4px 0;color:var(--text-secondary);font-size:12px">Nenhum produto encontrado.</div>';
+    return '<div style="padding:4px 0;color:var(--text-secondary);font-size:12px">Nenhum produto encontrado'+(miniOpts.emptyNote?(' '+miniOpts.emptyNote):'')+'.</div>';
   }
+  var showMercado = !miniOpts.hideMercado;
   var tableId = (rid||'prod')+'_prodTable';
   var sortInfo = miniSortState(expanded, tableId);
   rows = rows.map(function(p){ return Object.assign({}, p, {mercado_clean: cleanMercado(p.mercado)}); });
   rows = miniSortedRows(rows, sortInfo);
-  var html = '<div style="font-size:11.5px;color:var(--text-secondary);margin-bottom:4px">'+rows.length+' produto(s) prescrito(s) por este médico (clique numa coluna para ordenar):</div>'+
+  var html = '<div style="font-size:11.5px;color:var(--text-secondary);margin-bottom:4px">'+rows.length+' produto(s) prescrito(s) por este médico'+(miniOpts.countSuffix||'')+' (clique numa coluna para ordenar):</div>'+
     '<div class="tbl-wrap" style="max-height:340px;overflow-y:auto"><table class="dtable mini"><thead><tr>'+
-    miniTh('Mercado','mercado_clean',tableId,sortInfo,true)+miniTh('Produto','produto',tableId,sortInfo,true)+
+    (showMercado?miniTh('Mercado','mercado_clean',tableId,sortInfo,true):'')+miniTh('Produto','produto',tableId,sortInfo,true)+
     miniTh('TT Ant','tt_ant',tableId,sortInfo)+miniTh('TT Atual','tt_atual',tableId,sortInfo)+
     miniTh('EUF Ant','euf_ant',tableId,sortInfo)+miniTh('EUF Atual','euf_atual',tableId,sortInfo)+miniTh('Increm Mercado','tt_incr',tableId,sortInfo)+
     '</tr></thead><tbody>';
   rows.forEach(function(p){
     html += '<tr>'+
-      '<td style="text-align:left">'+esc(cleanMercado(p.mercado))+'</td>'+
+      (showMercado?'<td style="text-align:left">'+esc(p.mercado_clean)+'</td>':'')+
       '<td style="text-align:left">'+escProduto(p.produto)+'</td>'+
       '<td>'+fmtInt(p.tt_ant)+'</td><td>'+fmtInt(p.tt_atual)+'</td><td>'+fmtInt(p.euf_ant)+'</td><td>'+fmtInt(p.euf_atual)+'</td>'+
       '<td><span class="'+signClass(p.tt_incr)+'">'+fmtSignedInt(p.tt_incr)+'</span></td>'+
@@ -1296,11 +1314,24 @@ function buildPrescritores(){
     kpiWrap.appendChild(tile('Prescrições EUF (atual)', fmtInt(eufSum)));
     body.appendChild(kpiWrap);
 
+    // when a Produto/Mercado search is active, the drill-down should show only the matching
+    // rows for that médico (not their whole portfolio) -- otherwise a search for one SKU still
+    // dumps every other product/market that médico prescribes into the expansion.
+    var hasProdutoFilter = !!produtoSet, hasMercadoFilter = !!mercadoSet;
+    var drillDesc = (hasProdutoFilter || hasMercadoFilter)
+      ? 'Clique na seta para ver, para este médico, apenas '+(hasProdutoFilter?'o(s) produto(s)':'')+(hasProdutoFilter&&hasMercadoFilter?' e ':'')+(hasMercadoFilter?'o(s) mercado(s)':'')+' buscado(s) acima.'
+      : 'Clique na seta para ver todos os produtos que o médico prescreve.';
     var card2 = document.createElement('div'); card2.className='card';
-    card2.innerHTML = '<h2 class="h" style="margin-top:0">Todos os médicos do recorte</h2><p class="desc">Clique na seta para ver todos os produtos que o médico prescreve. Busque por nome.</p>';
+    card2.innerHTML = '<h2 class="h" style="margin-top:0">Todos os médicos do recorte</h2><p class="desc">'+drillDesc+' Busque por nome.</p>';
     var rowsWithChildren = rows.map(function(r){
-      return Object.assign({}, r, {produtos: productsOf(DATA.crm_list.indexOf(r.crm))});
+      var produtos = productsOf(DATA.crm_list.indexOf(r.crm));
+      if(produtoSet) produtos = produtos.filter(function(p){ return produtoSet.has(p.produtoIdx); });
+      if(mercadoSet) produtos = produtos.filter(function(p){ return mercadoSet.has(p.mercadoIdx); });
+      return Object.assign({}, r, {produtos: produtos});
     });
+    // hide the Mercado column only for a pure Produto search (Mercado not searched) -- per
+    // request, a Mercado search should keep showing which Mercado groups the listed produtos
+    var hideMercadoCol = hasProdutoFilter && !hasMercadoFilter;
     card2.appendChild(buildTable({
       columns:[
         {key:'medico', label:'Médico', fmt:function(v){return esc(v);}},
@@ -1312,7 +1343,8 @@ function buildPrescritores(){
         {key:'euf_atual', label:'EUF Atual', fmt:fmtInt},
         {key:'euf_incr', label:'Increm EUF', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtSignedInt(v)+'</span>';}},
       ],
-      rows: rowsWithChildren, childKey:'produtos', childRenderer:productMiniTable,
+      rows: rowsWithChildren, childKey:'produtos',
+      childRenderer: function(k,row,expanded,rid){ return productMiniTable(k,row,expanded,rid,{hideMercado:hideMercadoCol}); },
       searchable:true, cap:500, defaultSortKey:'tt_atual'
     }));
     body.appendChild(card2);
