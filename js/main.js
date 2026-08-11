@@ -19,6 +19,28 @@ document.addEventListener("DOMContentLoaded", () => {
     toggle.addEventListener("click", () => nav.classList.toggle("open"));
   }
 
+  const dropdown = document.querySelector(".nav-dropdown");
+  const dropdownToggle = document.querySelector(".nav-dropdown-toggle");
+  if (dropdown && dropdownToggle) {
+    dropdownToggle.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const isOpen = dropdown.classList.toggle("open");
+      dropdownToggle.setAttribute("aria-expanded", String(isOpen));
+    });
+    document.addEventListener("click", (event) => {
+      if (!dropdown.contains(event.target)) {
+        dropdown.classList.remove("open");
+        dropdownToggle.setAttribute("aria-expanded", "false");
+      }
+    });
+    dropdown.querySelectorAll(".dropdown-menu a").forEach((link) => {
+      link.addEventListener("click", () => {
+        dropdown.classList.remove("open");
+        dropdownToggle.setAttribute("aria-expanded", "false");
+      });
+    });
+  }
+
   const form = document.getElementById("contact-form");
   if (form) {
     form.addEventListener("submit", (event) => {
