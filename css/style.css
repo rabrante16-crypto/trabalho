@@ -11,8 +11,6 @@
   --verde-claro: #e4f7e4;
   --hero-grad-inicio: #0b3d33;
   --hero-grad-fim: #154715;
-  --laranja: #ee6c0c;
-  --laranja-escuro: #c9590a;
   --amarelo: #f5c518;
   --texto: #242424;
   --texto-claro: #5c6b5c;
@@ -40,8 +38,9 @@ body {
 }
 
 .display-font {
-  font-family: Impact, "Arial Narrow Bold", "Segoe UI", sans-serif;
-  letter-spacing: 0.01em;
+  font-family: "Montserrat", "Segoe UI", sans-serif;
+  font-weight: 800;
+  letter-spacing: -0.01em;
 }
 
 img {
@@ -152,6 +151,88 @@ ul {
 
 .nav-links a:hover,
 .nav-links a.active {
+  color: var(--verde-escuro);
+}
+
+/* Dropdown "Nossos Produtos" */
+.nav-dropdown {
+  position: relative;
+}
+
+.nav-dropdown-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  font: inherit;
+  font-weight: 500;
+  color: var(--texto);
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.15s ease;
+}
+
+.nav-dropdown-toggle svg {
+  width: 16px;
+  height: 16px;
+  transition: transform 0.15s ease;
+}
+
+.nav-dropdown-toggle:hover {
+  color: var(--verde-escuro);
+}
+
+.nav-dropdown.open .nav-dropdown-toggle {
+  color: var(--verde-escuro);
+}
+
+.nav-dropdown.open .nav-dropdown-toggle svg {
+  transform: rotate(180deg);
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: calc(100% + 14px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--branco);
+  border: 1px solid var(--borda);
+  border-radius: 12px;
+  box-shadow: var(--sombra);
+  padding: 8px;
+  min-width: 200px;
+  display: none;
+  z-index: 70;
+}
+
+/* Ponte invisível: mantém o hover ativo entre o botão e a lista */
+.nav-dropdown::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  top: 100%;
+  width: 220px;
+  height: 14px;
+}
+
+.nav-dropdown.open .dropdown-menu,
+.nav-dropdown:hover .dropdown-menu {
+  display: block;
+}
+
+.dropdown-menu li a {
+  display: block;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  color: var(--texto);
+  white-space: nowrap;
+}
+
+.dropdown-menu li a:hover {
+  background: var(--verde-claro);
   color: var(--verde-escuro);
 }
 
@@ -362,6 +443,8 @@ section {
   padding: 28px;
   box-shadow: var(--sombra);
   transition: transform 0.15s ease;
+  display: flex;
+  flex-direction: column;
 }
 
 .card:hover {
@@ -377,8 +460,12 @@ section {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.3rem;
   margin-bottom: 16px;
+}
+
+.card .icon svg {
+  width: 24px;
+  height: 24px;
 }
 
 .card h3 {
@@ -387,7 +474,8 @@ section {
 }
 
 .card p {
-  color: var(--texto-claro);
+  color: var(--verde);
+  font-weight: 700;
   font-size: 0.95rem;
 }
 
@@ -412,9 +500,104 @@ section {
 }
 
 .card .btn {
-  margin-top: 18px;
+  margin-top: auto;
   width: 100%;
   justify-content: center;
+}
+
+/* Cards de planos (Telecom) */
+.plan-card {
+  background: var(--branco);
+  border: 2px solid var(--verde);
+  border-radius: 16px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--sombra);
+}
+
+.plan-card-header {
+  background: var(--verde);
+  color: var(--branco);
+  padding: 20px;
+  text-align: center;
+}
+
+.plan-card-header h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.plan-gb {
+  font-size: 2.2rem;
+  font-weight: 800;
+  line-height: 1;
+  margin-bottom: 10px;
+}
+
+.plan-badge {
+  display: inline-block;
+  background: var(--preto);
+  color: var(--branco);
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+
+.plan-card-body {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.plan-card-body ul {
+  margin-bottom: 16px;
+}
+
+.plan-card-body ul li {
+  font-size: 0.85rem;
+  color: var(--texto-claro);
+  padding: 4px 0;
+  text-align: center;
+}
+
+.plan-card-body ul li strong {
+  color: var(--texto);
+}
+
+.plan-price {
+  text-align: center;
+  font-size: 1.8rem;
+  font-weight: 800;
+  color: var(--texto);
+  margin-bottom: 4px;
+}
+
+.plan-price span {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--texto-claro);
+}
+
+.plan-note {
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--texto-claro);
+  margin-bottom: 16px;
+}
+
+.plan-disclaimer {
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--texto-claro);
+  margin-top: 32px;
+}
+
+.plan-disclaimer + .plan-disclaimer {
+  margin-top: 8px;
 }
 
 /* Passos (como funciona) */
@@ -556,6 +739,87 @@ section {
   flex-shrink: 0;
 }
 
+/* Seção do App iGreen Club */
+.app-section {
+  background: var(--branco);
+  color: var(--texto);
+}
+
+.app-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 48px;
+  align-items: center;
+}
+
+.app-phone-frame {
+  display: flex;
+  justify-content: center;
+}
+
+.app-phone-frame img {
+  width: 100%;
+  display: block;
+}
+
+.app-label {
+  font-size: 3rem;
+  font-weight: 800;
+  color: var(--verde);
+  line-height: 1;
+  margin-bottom: 12px;
+}
+
+.app-logo {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  margin-bottom: 28px;
+}
+
+.app-logo img {
+  height: 34px;
+  width: auto;
+}
+
+.app-logo span {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--texto);
+  margin-bottom: 3px;
+}
+
+.app-heading {
+  font-size: 1.6rem;
+  line-height: 1.35;
+  font-weight: 800;
+  margin-bottom: 28px;
+  max-width: 480px;
+}
+
+.app-heading .verde {
+  color: var(--verde);
+}
+
+.app-list {
+  max-width: 480px;
+}
+
+.app-list li {
+  position: relative;
+  padding-left: 18px;
+  margin-bottom: 12px;
+  color: var(--texto-claro);
+  font-size: 0.98rem;
+}
+
+.app-list li::before {
+  content: "•";
+  position: absolute;
+  left: 0;
+  color: var(--verde);
+}
+
 /* Mecanismo em ícones circulares */
 .mechanism {
   display: grid;
@@ -590,10 +854,22 @@ section {
   color: var(--texto-claro);
 }
 
-/* Vídeo de depoimento */
-.video-wrapper {
-  max-width: 640px;
+/* Vídeos de depoimento */
+.video-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
+  max-width: 900px;
   margin: 0 auto;
+}
+
+.video-item h3 {
+  text-align: center;
+  font-size: 1.05rem;
+  margin-bottom: 16px;
+}
+
+.video-wrapper {
   border-radius: 20px;
   overflow: hidden;
   box-shadow: var(--sombra);
@@ -607,7 +883,7 @@ section {
 
 /* Seção de recrutamento */
 .recruit-band {
-  background: var(--laranja);
+  background: var(--verde-escuro);
   color: var(--branco);
   text-align: center;
   padding: 32px 24px;
@@ -626,11 +902,11 @@ section {
 
 .btn-recruit {
   background: var(--branco);
-  color: var(--laranja-escuro);
+  color: var(--verde-escuro);
 }
 
 .btn-recruit:hover {
-  background: var(--verde-escuro);
+  background: var(--verde-claro);
 }
 
 /* Formulário de contato */
@@ -726,9 +1002,9 @@ section {
   font-size: 0.92rem;
 }
 
-/* Seção de contato em laranja */
+/* Seção de contato em verde escuro */
 .section-dark {
-  background: var(--laranja);
+  background: var(--verde-escuro);
   color: var(--branco);
   padding: 72px 0;
 }
@@ -759,25 +1035,19 @@ section {
 }
 
 .section-dark .btn-primary {
-  background: var(--verde);
+  background: var(--branco);
+  color: var(--verde-escuro);
 }
 
 .section-dark .btn-primary:hover {
-  background: var(--verde-escuro);
+  background: var(--verde-claro);
 }
 
 /* Footer */
 .footer {
-  background: var(--laranja);
+  background: var(--verde-escuro);
   color: var(--branco);
   padding: 32px 0 24px;
-}
-
-.footer .container {
-  display: grid;
-  grid-template-columns: 1.4fr 1fr 1fr;
-  gap: 32px;
-  margin-bottom: 32px;
 }
 
 .footer h4 {
@@ -804,6 +1074,7 @@ section {
   background: rgba(0, 0, 0, 0.15);
   border-color: rgba(255, 255, 255, 0.2);
   color: var(--branco);
+  margin-bottom: 24px;
 }
 
 .footer-bottom {
@@ -837,14 +1108,37 @@ section[id] {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.6rem;
   box-shadow: 0 10px 24px rgba(37, 211, 102, 0.4);
   z-index: 60;
   transition: transform 0.15s ease;
+  animation: whatsapp-pulse 2.2s infinite;
+}
+
+.whatsapp-float svg {
+  width: 30px;
+  height: 30px;
 }
 
 .whatsapp-float:hover {
   transform: scale(1.08);
+}
+
+@keyframes whatsapp-pulse {
+  0% {
+    box-shadow: 0 10px 24px rgba(37, 211, 102, 0.4), 0 0 0 0 rgba(37, 211, 102, 0.55);
+  }
+  70% {
+    box-shadow: 0 10px 24px rgba(37, 211, 102, 0.4), 0 0 0 16px rgba(37, 211, 102, 0);
+  }
+  100% {
+    box-shadow: 0 10px 24px rgba(37, 211, 102, 0.4), 0 0 0 0 rgba(37, 211, 102, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .whatsapp-float {
+    animation: none;
+  }
 }
 
 /* Página interna (título de topo) */
@@ -882,7 +1176,9 @@ section[id] {
   .grid-3,
   .grid-2,
   .steps,
-  .mechanism {
+  .mechanism,
+  .app-grid,
+  .video-grid {
     grid-template-columns: 1fr;
   }
 
@@ -919,5 +1215,23 @@ section[id] {
 
   .hero h1 {
     font-size: 2rem;
+  }
+
+  .nav-dropdown-toggle {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .dropdown-menu {
+    position: static;
+    transform: none;
+    box-shadow: none;
+    border: none;
+    padding: 4px 0 0 14px;
+    min-width: 0;
+  }
+
+  .nav-dropdown:hover .dropdown-menu {
+    display: none;
   }
 }
