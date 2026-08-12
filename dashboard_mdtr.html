@@ -690,16 +690,16 @@ function buildVisaoGeral(){
 
   var card = document.createElement('div'); card.className='card';
   card.innerHTML = '<h2 class="h" style="margin-top:0">Unidades e Faturamento por Setor</h2>'+
-    '<p class="desc">Comparativo '+DATA.file_info.periodo_anterior+' (mês cheio) vs '+DATA.file_info.periodo_atual+' (parcial, '+DATA.file_info.dias_coletados+' dias &mdash; por isso aparece menor na barra) por área de venda.</p>'+
-    '<div class="legend"><span><span class="sw" style="background:var(--baseline)"></span>'+DATA.file_info.periodo_anterior+' (Unidades)</span><span><span class="sw" style="background:var(--s1)"></span>'+DATA.file_info.periodo_atual+' parcial (Unidades)</span></div>';
-  var chart1 = hGroupedBar(setores.map(function(s){return {label:niceName(s.setor), v1:s.unid_jun25, v2:s.unid_jun26};}),
-    {formatter:fmtInt, colorA:'var(--baseline)', colorB:'var(--s1)', labelA:DATA.file_info.periodo_anterior, labelB:DATA.file_info.periodo_atual+' (parcial)'});
+    '<p class="desc">Comparativo '+DATA.file_info.periodo_anterior+' (mês cheio) vs '+DATA.file_info.periodo_atual+' (projeção do mês cheio, a partir do parcial de '+DATA.file_info.dias_coletados+' dias) por área de venda.</p>'+
+    '<div class="legend"><span><span class="sw" style="background:var(--baseline)"></span>'+DATA.file_info.periodo_anterior+' (Unidades)</span><span><span class="sw" style="background:var(--s1)"></span>'+DATA.file_info.periodo_atual+' projetado (Unidades)</span></div>';
+  var chart1 = hGroupedBar(setores.map(function(s){return {label:niceName(s.setor), v1:s.unid_jun25, v2:s.unid_proj};}),
+    {formatter:fmtInt, colorA:'var(--baseline)', colorB:'var(--s1)', labelA:DATA.file_info.periodo_anterior, labelB:DATA.file_info.periodo_atual+' (projetado)'});
   card.appendChild(chart1);
   var legend2 = document.createElement('div'); legend2.className='legend'; legend2.style.marginTop='18px';
-  legend2.innerHTML = '<span><span class="sw" style="background:var(--baseline)"></span>'+DATA.file_info.periodo_anterior+' (Faturamento)</span><span><span class="sw" style="background:var(--s2)"></span>'+DATA.file_info.periodo_atual+' parcial (Faturamento)</span>';
+  legend2.innerHTML = '<span><span class="sw" style="background:var(--baseline)"></span>'+DATA.file_info.periodo_anterior+' (Faturamento)</span><span><span class="sw" style="background:var(--s2)"></span>'+DATA.file_info.periodo_atual+' projetado (Faturamento)</span>';
   card.appendChild(legend2);
-  var chart2 = hGroupedBar(setores.map(function(s){return {label:niceName(s.setor), v1:s.reais_jun25, v2:s.reais_jun26};}),
-    {formatter:fmtBRL, colorA:'var(--baseline)', colorB:'var(--s2)', labelA:DATA.file_info.periodo_anterior, labelB:DATA.file_info.periodo_atual+' (parcial)'});
+  var chart2 = hGroupedBar(setores.map(function(s){return {label:niceName(s.setor), v1:s.reais_jun25, v2:s.reais_proj};}),
+    {formatter:fmtBRL, colorA:'var(--baseline)', colorB:'var(--s2)', labelA:DATA.file_info.periodo_anterior, labelB:DATA.file_info.periodo_atual+' (projetado)'});
   card.appendChild(chart2);
   el.appendChild(card);
 
