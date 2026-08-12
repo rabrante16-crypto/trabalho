@@ -141,7 +141,7 @@
   <section class="panel" id="panel-estrategia"></section>
   <section class="panel" id="panel-metodologia"></section>
   <footer class="foot">
-    Dashboard gerado localmente a partir de <span id="foot-file"></span> &middot; abas consideradas: QUERY (planilha mensal, Agosto/26 parcial, 8 dias) e MAPA TRI (arquivo de auditoria original).
+    Dashboard gerado localmente a partir de <span id="foot-file"></span> &middot; aba considerada: QUERY (planilha mensal, Agosto/26 parcial, 8 dias).
     Arquivo 100% offline &mdash; nenhum dado sai do seu computador.
   </footer>
 </div>
@@ -308,6 +308,7 @@ function buildTable(opts){
   var sortKey = opts.defaultSortKey || null;
   var sortDesc = opts.defaultSortDesc!==false;
   var expanded = {};
+  var searchFocusPending = false;
 
   function matches(row){
     if(!searchVal) return true;
@@ -366,7 +367,8 @@ function buildTable(opts){
 
     if(opts.searchable){
       var inp = box.querySelector('#'+opts._id+'_search');
-      inp.addEventListener('input', function(){ searchVal = inp.value; render(); inp.focus(); inp.setSelectionRange(inp.value.length,inp.value.length); });
+      if(searchFocusPending){ inp.focus(); inp.setSelectionRange(inp.value.length,inp.value.length); }
+      inp.addEventListener('input', function(){ searchVal = inp.value; searchFocusPending = true; render(); });
     }
     box.querySelectorAll('th[data-k]').forEach(function(th){
       th.addEventListener('click', function(){
@@ -856,6 +858,7 @@ function buildRankingPdvTable(rows, opts){
   var redeVal = '', pdvVal = '';
   var sortKey = 'reais_proj', sortDesc = true;
   var expanded = {};
+  var focusField = null; // 'rede' | 'pdv' | null -- which search box to refocus after the next render
   var columns = [
     {key:'bandeira', label:'Rede (Bandeira)', fmt:function(v){return esc(v);}},
     {key:'unid_jun25', label:DATA.file_info.periodo_anterior+' Unid', fmt:fmtInt},
@@ -930,9 +933,11 @@ function buildRankingPdvTable(rows, opts){
       '</div>'+html;
 
     var redeInp = box.querySelector('#redeSearch');
-    redeInp.addEventListener('input', function(){ redeVal = redeInp.value; render(); redeInp.focus(); redeInp.setSelectionRange(redeInp.value.length, redeInp.value.length); });
     var pdvInp = box.querySelector('#pdvCodeSearch');
-    pdvInp.addEventListener('input', function(){ pdvVal = pdvInp.value; render(); pdvInp.focus(); pdvInp.setSelectionRange(pdvInp.value.length, pdvInp.value.length); });
+    if(focusField==='rede'){ redeInp.focus(); redeInp.setSelectionRange(redeInp.value.length, redeInp.value.length); }
+    else if(focusField==='pdv'){ pdvInp.focus(); pdvInp.setSelectionRange(pdvInp.value.length, pdvInp.value.length); }
+    redeInp.addEventListener('input', function(){ redeVal = redeInp.value; focusField='rede'; render(); });
+    pdvInp.addEventListener('input', function(){ pdvVal = pdvInp.value; focusField='pdv'; render(); });
 
     box.querySelectorAll('th[data-k]').forEach(function(th){
       th.addEventListener('click', function(){
@@ -965,43 +970,18 @@ function buildRankingPdvTable(rows, opts){
   return box;
 }
 
-// ================= build: Mapa Trimestral =================
-function buildMapaTri(){
-  var el = document.getElementById('panel-tri');
-  el.innerHTML = '<h2 class="h">Mapa Trimestral por Marca</h2>'+
-    '<p class="desc">Comparação do trimestre Ago&ndash;Set&ndash;Out/24 (TRI anterior) com Ago&ndash;Set&ndash;Out/25 (TRI atual), projeção para Nov/25 e impacto financeiro (gap projetado x preço). Período distinto do restante do dashboard (esta aba não foi atualizada para o ciclo atual). Fonte: aba <b>MAPA TRI</b>.</p>'+
-    (currentSetor==='Todos' ? '' : '<div class="note">A fonte desta aba (MAPA TRI) não possui quebra por Setor &mdash; os dados abaixo permanecem consolidados no Distrital, independentemente do filtro selecionado no topo da página.</div>');
-
-  var card = document.createElement('div'); card.className='card';
-  card.innerHTML = '<h2 class="h" style="margin-top:0">Maiores impactos financeiros (R$) por marca</h2>';
-  var sorted = DATA.mapa_tri.slice().sort(function(a,b){return a.impacto_reais-b.impacto_reais;});
-  var worst = sorted.slice(0,10).map(function(m){return {label:niceName(m.marca), value:m.impacto_reais};});
-  var best = sorted.slice(-10).reverse().map(function(m){return {label:niceName(m.marca), value:m.impacto_reais};});
-  var row2 = document.createElement('div'); row2.className='row2';
-  var c1=document.createElement('div'); c1.innerHTML='<div style="font-size:12.5px;color:var(--text-secondary);margin-bottom:6px">10 maiores impactos negativos</div>';
-  c1.appendChild(signBar(worst,{formatter:fmtSignedBRL, color:'var(--s8)'}));
-  var c2=document.createElement('div'); c2.innerHTML='<div style="font-size:12.5px;color:var(--text-secondary);margin-bottom:6px">10 maiores impactos positivos</div>';
-  c2.appendChild(signBar(best,{formatter:fmtSignedBRL, color:'var(--s1)'}));
-  row2.appendChild(c1); row2.appendChild(c2);
-  card.appendChild(row2);
-  el.appendChild(card);
-
-  var card2 = document.createElement('div'); card2.className='card';
-  card2.innerHTML = '<h2 class="h" style="margin-top:0">Todas as marcas &mdash; visão trimestral</h2>';
-  var tbl = buildTable({
-    columns:[
-      {key:'marca', label:'Marca', fmt:function(v){return esc(niceName(v));}},
-      {key:'tri24', label:'TRI 24 (Unid)', fmt:fmtInt},
-      {key:'tri25', label:'TRI 25 (Unid)', fmt:fmtInt},
-      {key:'gap_unid', label:'Gap Unid', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtSignedInt(v)+'</span>';}},
-      {key:'proj_nov25', label:'Proj Nov/25', fmt:function(v){return fmtNum(v,1);}},
-      {key:'impacto_reais', label:'Impacto R$', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtSignedBRL(v)+'</span>';}},
-    ],
-    rows: DATA.mapa_tri, searchable:true, defaultSortKey:'impacto_reais',
-    totalRow: Object.assign({marca:'Total Geral'}, DATA.mapa_tri_total)
+// ================= build: Trimestre (Jun-Jul-Ago) =================
+// Substitui a antiga aba "Mapa Trimestral" (fonte MAPA TRI, comparava Ago-Set-Out/24 x /25 -- período
+// desalinhado do resto do dashboard). Agora compara Jun-Jul-Ago/25 x Jun-Jul-Ago/26, com Agosto/26
+// projetado a partir dos dias coletados, na mesma base QUERY e mesma metodologia das demais abas.
+function buildTrimestreJunAgo(){
+  buildPeriodTab('panel-tri', {
+    months: [6,7,8],
+    tituloPeriodo: 'Trimestre (Jun-Jul-Ago)',
+    applyProj: true,
+    descricao: 'Acumulado de Junho, Julho e Agosto de 2025 comparado com o mesmo trimestre de 2026 (Junho e Julho fechados; Agosto/26 é a projeção do mês cheio a partir dos '+DATA.file_info.dias_coletados+' dias coletados).',
+    notaProjecao: 'Agosto/26 está com apenas '+DATA.file_info.dias_coletados+' dias de coleta; o valor usado neste trimestre é a projeção do mês cheio (parcial &times; '+DATA.file_info.dias_mes+'/'+DATA.file_info.dias_coletados+'), para manter a comparação justa com Jun-Jul-Ago/25 (todos meses cheios).'
   });
-  card2.appendChild(tbl);
-  el.appendChild(card2);
 }
 
 // ================= build: Marcas em decremento por Brick =================
@@ -1370,11 +1350,11 @@ function buildMetodologia(){
   el.innerHTML = '<h2 class="h">Metodologia e notas de leitura</h2>'+
     '<div class="note"><b>Arquivo de origem:</b> '+esc(DATA.file_info.nome_arquivo)+'<br>'+
     '<b>Distrital:</b> '+esc(niceName(DATA.file_info.distrital))+' (código '+esc(DATA.file_info.distrital.split(' - ')[0])+')<br>'+
-    '<b>Abas consideradas:</b> aba <b>QUERY</b> da planilha mensal (01MDTR_MENSAL), linha a linha, para Visão Geral, Ranking de Marcas, Ranking de PDV, Decremento por Brick, Outras Dimensões, YTD, Trimestre e Análise Estratégica; aba <b>MAPA TRI</b> do arquivo de auditoria original para a aba Mapa Trimestral (período diferente, não atualizado neste ciclo).</div>'+
-    '<div class="note"><b>Projeção de '+DATA.file_info.periodo_atual+' (mês parcial):</b> a planilha mensal mais recente chegou com apenas <b>'+DATA.file_info.dias_coletados+' dias de coleta</b> em '+DATA.file_info.periodo_atual+'. Para permitir uma leitura de "indicadores gerais" comparável a um mês fechado, todas as abas deste dashboard (Visão Geral, Ranking de Marcas, Ranking de PDV, Decremento por Brick, Outras Dimensões, YTD e Análise Estratégica) aplicam o mesmo fator de projeção do mês cheio sobre o valor parcial coletado: <b>parcial &times; '+DATA.file_info.dias_mes+'/'+DATA.file_info.dias_coletados+'</b> (&asymp; &times;'+(Math.round(DATA.file_info.proj_factor*100)/100)+'). Os valores de '+DATA.file_info.periodo_anterior+' não sofrem nenhum ajuste (mês já fechado); as colunas "Increm"/"Evol %" comparam a projeção de '+DATA.file_info.periodo_atual+' contra o real de '+DATA.file_info.periodo_anterior+'. A aba Trimestre (Abr-Mai-Jun) não é afetada, pois não inclui Agosto.</div>'+
+    '<b>Abas consideradas:</b> aba <b>QUERY</b> da planilha mensal (01MDTR_MENSAL), linha a linha, para todas as abas do dashboard (Visão Geral, Ranking de Marcas, Ranking de PDV, Decremento por Brick, Outras Dimensões, Trimestre (Jun-Ago), YTD, Trimestre (Abr-Jun) e Análise Estratégica).</div>'+
+    '<div class="note"><b>Projeção de '+DATA.file_info.periodo_atual+' (mês parcial):</b> a planilha mensal mais recente chegou com apenas <b>'+DATA.file_info.dias_coletados+' dias de coleta</b> em '+DATA.file_info.periodo_atual+'. Para permitir uma leitura de "indicadores gerais" comparável a um mês fechado, todas as abas deste dashboard que incluem Agosto (Visão Geral, Ranking de Marcas, Ranking de PDV, Decremento por Brick, Outras Dimensões, Trimestre (Jun-Ago), YTD e Análise Estratégica) aplicam o mesmo fator de projeção do mês cheio sobre o valor parcial coletado: <b>parcial &times; '+DATA.file_info.dias_mes+'/'+DATA.file_info.dias_coletados+'</b> (&asymp; &times;'+(Math.round(DATA.file_info.proj_factor*100)/100)+'). Os valores de '+DATA.file_info.periodo_anterior+' não sofrem nenhum ajuste (mês já fechado); as colunas "Increm"/"Evol %" comparam a projeção de '+DATA.file_info.periodo_atual+' contra o real de '+DATA.file_info.periodo_anterior+'. A aba Trimestre (Abr-Mai-Jun) não é afetada, pois não inclui Agosto.</div>'+
     '<div class="note"><b>Visão Geral, Ranking de Marcas, Ranking de PDV e Decremento por Brick:</b> recalculados diretamente da aba QUERY, linha a linha, tanto para "Todos os setores" quanto para um setor específico &mdash; não dependem mais de tabelas dinâmicas pré-calculadas do Excel, o que também elimina qualquer inconsistência de detalhamento por setor entre o total geral e a visão filtrada.</div>'+
-    '<div class="note"><b>Filtro de Setor:</b> o seletor no topo da página recalcula, na hora, todas as abas a partir dos dados linha a linha (Visão Geral, Ranking de Marcas, Ranking de PDV, Decremento por Brick, Outras Dimensões, YTD, Trimestre e Análise Estratégica). A única exceção é a aba <b>Mapa Trimestral</b>, cuja fonte original (aba MAPA TRI) não possui quebra por Setor.</div>'+
-    '<div class="note"><b>Aba MAPA TRI:</b> não foi atualizada para o ciclo mais recente &mdash; continua refletindo o trimestre Ago&ndash;Set&ndash;Out/24 vs Ago&ndash;Set&ndash;Out/25 com projeção para Nov/25, a partir do arquivo de auditoria original. Mantida como está, pois representa uma leitura trimestral complementar e não o mesmo recorte mensal das demais abas.</div>'+
+    '<div class="note"><b>Filtro de Setor:</b> o seletor no topo da página recalcula, na hora, todas as abas deste dashboard a partir dos dados linha a linha da aba QUERY, sem exceção.</div>'+
+    '<div class="note"><b>Trimestre (Jun-Ago):</b> substitui a antiga aba "Mapa Trimestral" (que usava a aba MAPA TRI do arquivo de auditoria original e comparava Ago&ndash;Set&ndash;Out/24 x Ago&ndash;Set&ndash;Out/25, um período desalinhado do restante do dashboard). Agora compara Junho, Julho e Agosto de 2025 com o mesmo trimestre de 2026 &mdash; Agosto/26 projetado como em todas as demais abas &mdash; usando a mesma base QUERY.</div>'+
     '<div class="note"><b>Aba MARCAS EM DECREMENTO POR BRICK:</b> a tabela dinâmica original dessa aba estava configurada com quebra por Setor, não por Marca/Brick como o nome sugere. Para entregar a análise pretendida, este dashboard recalcula o decremento por Brick × Marca diretamente da aba QUERY (ver aba "Decremento por Brick").</div>'+
     '<div class="note"><b>Análise Estratégica:</b> as "ações sugeridas" para Bricks e Marcas são heurísticas simples baseadas nos limiares de evolução % e materialidade (representatividade no faturamento), geradas automaticamente a partir dos dados. Servem como ponto de partida para priorização, não substituem o conhecimento do gestor sobre o território.</div>'+
     '<div class="note"><b>Universo x vendas:</b> a planilha mensal cadastra '+fmtInt(DATA.meta.total_rows)+' combinações Brick × PDV × Marca (o universo potencial de venda do distrital); '+fmtInt(DATA.meta.rows_with_sales)+' delas registraram alguma venda (unidades ou reais) no período analisado. Contagens de "Bricks", "Marcas", "PDVs" e "Redes" nos indicadores gerais refletem apenas os que tiveram venda no período.</div>'+
@@ -1387,7 +1367,7 @@ var TABS = [
   {id:'visao', label:'Visão Geral', build:buildVisaoGeral},
   {id:'marcas', label:'Ranking Marcas', build:buildRankingMarcas},
   {id:'pdv', label:'Ranking PDV', build:buildRankingPdv},
-  {id:'tri', label:'Mapa Trimestral', build:buildMapaTri},
+  {id:'tri', label:'Trimestre (Jun-Ago)', build:buildTrimestreJunAgo},
   {id:'brick', label:'Decremento por Brick', build:buildBrick},
   {id:'outras', label:'Outras Dimensões', build:buildOutras},
   {id:'ytd', label:'YTD (Jan-Ago)', build:buildYTD},
