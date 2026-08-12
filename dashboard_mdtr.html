@@ -713,6 +713,7 @@ function buildVisaoGeral(){
       {key:'unid_proj', label:DATA.file_info.periodo_atual+' Unid (Proj)', fmt:fmtInt},
       {key:'unid_increm', label:'Increm Unid', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtSignedInt(v)+'</span>';}},
       {key:'unid_evol', label:'Evol %', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtPct(v)+'</span>';}},
+      {key:'reais_jun25', label:DATA.file_info.periodo_anterior+' R$', fmt:fmtBRL},
       {key:'reais_jun26', label:DATA.file_info.periodo_atual+' R$ ('+DATA.file_info.dias_coletados+'d)', fmt:fmtBRL},
       {key:'reais_proj', label:DATA.file_info.periodo_atual+' R$ (Proj)', fmt:fmtBRL},
       {key:'reais_increm', label:'Increm R$', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtSignedBRL(v)+'</span>';}},
@@ -754,7 +755,7 @@ function buildRankingMarcas(){
         marca: m.marca,
         unid_jun25: m.unid_jun25, unid_jun26: m.unid_jun26, unid_proj: m.unid_proj,
         unid_increm: m.unid_increm, unid_evol: m.unid_evol,
-        reais_jun26: m.reais_jun26, reais_proj: m.reais_proj, reais_increm: m.reais_increm,
+        reais_jun25: m.reais_jun25, reais_jun26: m.reais_jun26, reais_proj: m.reais_proj, reais_increm: m.reais_increm,
         reais_evol: m.reais_evol, repres: m.repres,
       };
     });
@@ -794,6 +795,7 @@ function buildRankingMarcas(){
       {key:'unid_proj', label:DATA.file_info.periodo_atual+' Unid (Proj)', fmt:fmtInt},
       {key:'unid_increm', label:'Increm Unid', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtSignedInt(v)+'</span>';}},
       {key:'unid_evol', label:'Evol %', fmt:function(v){return v==null?'-':'<span class="'+signClass(v)+'">'+fmtPct(v)+'</span>';}},
+      {key:'reais_jun25', label:DATA.file_info.periodo_anterior+' R$', fmt:fmtBRL},
       {key:'reais_jun26', label:DATA.file_info.periodo_atual+' R$ ('+DATA.file_info.dias_coletados+'d)', fmt:fmtBRL},
       {key:'reais_proj', label:DATA.file_info.periodo_atual+' R$ (Proj)', fmt:fmtBRL},
       {key:'reais_increm', label:'Increm R$', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtSignedBRL(v)+'</span>';}},
@@ -820,7 +822,7 @@ function buildRankingPdv(){
         bandeira: m.bandeira,
         unid_jun25: m.unid_jun25, unid_jun26: m.unid_jun26, unid_proj: m.unid_proj,
         unid_increm: m.unid_increm, unid_evol: m.unid_evol,
-        reais_jun26: m.reais_jun26, reais_proj: m.reais_proj, reais_increm: m.reais_increm,
+        reais_jun25: m.reais_jun25, reais_jun26: m.reais_jun26, reais_proj: m.reais_proj, reais_increm: m.reais_increm,
         reais_evol: m.reais_evol, repres: m.repres,
       };
     });
@@ -869,6 +871,8 @@ function buildRankingPdvTable(rows, opts){
     {key:'unid_jun26', label:DATA.file_info.periodo_atual+' Unid ('+DATA.file_info.dias_coletados+'d)', fmt:fmtInt},
     {key:'unid_proj', label:DATA.file_info.periodo_atual+' Unid (Proj)', fmt:fmtInt},
     {key:'unid_increm', label:'Increm Unid', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtSignedInt(v)+'</span>';}},
+    {key:'unid_evol', label:'Evol % Unid', fmt:function(v){return v==null?'-':'<span class="'+signClass(v)+'">'+fmtPct(v)+'</span>';}},
+    {key:'reais_jun25', label:DATA.file_info.periodo_anterior+' R$', fmt:fmtBRL},
     {key:'reais_jun26', label:DATA.file_info.periodo_atual+' R$ ('+DATA.file_info.dias_coletados+'d)', fmt:fmtBRL},
     {key:'reais_proj', label:DATA.file_info.periodo_atual+' R$ (Proj)', fmt:fmtBRL},
     {key:'reais_increm', label:'Increm R$', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtSignedBRL(v)+'</span>';}},
@@ -1015,6 +1019,8 @@ function buildBrick(){
       {key:'unid_jun26', label:DATA.file_info.periodo_atual+' Unid ('+DATA.file_info.dias_coletados+'d)', fmt:fmtInt},
       {key:'unid_proj', label:DATA.file_info.periodo_atual+' Unid (Proj)', fmt:fmtInt},
       {key:'unid_increm', label:'Increm Unid', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtSignedInt(v)+'</span>';}},
+      {key:'unid_evol', label:'Evol % Unid', fmt:function(v){return v==null?'-':'<span class="'+signClass(v)+'">'+fmtPct(v)+'</span>';}},
+      {key:'reais_jun25', label:DATA.file_info.periodo_anterior+' R$', fmt:fmtBRL},
       {key:'reais_jun26', label:DATA.file_info.periodo_atual+' R$ ('+DATA.file_info.dias_coletados+'d)', fmt:fmtBRL},
       {key:'reais_proj', label:DATA.file_info.periodo_atual+' R$ (Proj)', fmt:fmtBRL},
       {key:'reais_increm', label:'Increm R$', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtSignedBRL(v)+'</span>';}},
