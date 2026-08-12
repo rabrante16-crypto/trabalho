@@ -709,10 +709,12 @@ function buildVisaoGeral(){
     columns:[
       {key:'setor', label:'Setor', fmt:function(v){return esc(niceName(v));}},
       {key:'unid_jun25', label:DATA.file_info.periodo_anterior+' Unid', fmt:fmtInt},
-      {key:'unid_proj', label:DATA.file_info.periodo_atual+' Unid', fmt:fmtInt},
+      {key:'unid_jun26', label:DATA.file_info.periodo_atual+' Unid ('+DATA.file_info.dias_coletados+'d)', fmt:fmtInt},
+      {key:'unid_proj', label:DATA.file_info.periodo_atual+' Unid (Proj)', fmt:fmtInt},
       {key:'unid_increm', label:'Increm Unid', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtSignedInt(v)+'</span>';}},
       {key:'unid_evol', label:'Evol %', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtPct(v)+'</span>';}},
-      {key:'reais_proj', label:DATA.file_info.periodo_atual+' R$', fmt:fmtBRL},
+      {key:'reais_jun26', label:DATA.file_info.periodo_atual+' R$ ('+DATA.file_info.dias_coletados+'d)', fmt:fmtBRL},
+      {key:'reais_proj', label:DATA.file_info.periodo_atual+' R$ (Proj)', fmt:fmtBRL},
       {key:'reais_increm', label:'Increm R$', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtSignedBRL(v)+'</span>';}},
       {key:'reais_evol', label:'Evol % R$', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtPct(v)+'</span>';}},
       {key:'repres', label:'Repres %', fmt:fmtPct},
@@ -788,10 +790,12 @@ function buildRankingMarcas(){
     columns:[
       {key:'marca', label:'Marca', fmt:function(v){return esc(niceName(v));}},
       {key:'unid_jun25', label:DATA.file_info.periodo_anterior+' Unid', fmt:fmtInt},
-      {key:'unid_proj', label:DATA.file_info.periodo_atual+' Unid', fmt:fmtInt},
+      {key:'unid_jun26', label:DATA.file_info.periodo_atual+' Unid ('+DATA.file_info.dias_coletados+'d)', fmt:fmtInt},
+      {key:'unid_proj', label:DATA.file_info.periodo_atual+' Unid (Proj)', fmt:fmtInt},
       {key:'unid_increm', label:'Increm Unid', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtSignedInt(v)+'</span>';}},
       {key:'unid_evol', label:'Evol %', fmt:function(v){return v==null?'-':'<span class="'+signClass(v)+'">'+fmtPct(v)+'</span>';}},
-      {key:'reais_proj', label:DATA.file_info.periodo_atual+' R$', fmt:fmtBRL},
+      {key:'reais_jun26', label:DATA.file_info.periodo_atual+' R$ ('+DATA.file_info.dias_coletados+'d)', fmt:fmtBRL},
+      {key:'reais_proj', label:DATA.file_info.periodo_atual+' R$ (Proj)', fmt:fmtBRL},
       {key:'reais_increm', label:'Increm R$', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtSignedBRL(v)+'</span>';}},
       {key:'repres', label:'Repres %', fmt:fmtPct},
     ],
@@ -862,9 +866,11 @@ function buildRankingPdvTable(rows, opts){
   var columns = [
     {key:'bandeira', label:'Rede (Bandeira)', fmt:function(v){return esc(v);}},
     {key:'unid_jun25', label:DATA.file_info.periodo_anterior+' Unid', fmt:fmtInt},
-    {key:'unid_proj', label:DATA.file_info.periodo_atual+' Unid', fmt:fmtInt},
+    {key:'unid_jun26', label:DATA.file_info.periodo_atual+' Unid ('+DATA.file_info.dias_coletados+'d)', fmt:fmtInt},
+    {key:'unid_proj', label:DATA.file_info.periodo_atual+' Unid (Proj)', fmt:fmtInt},
     {key:'unid_increm', label:'Increm Unid', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtSignedInt(v)+'</span>';}},
-    {key:'reais_proj', label:DATA.file_info.periodo_atual+' R$', fmt:fmtBRL},
+    {key:'reais_jun26', label:DATA.file_info.periodo_atual+' R$ ('+DATA.file_info.dias_coletados+'d)', fmt:fmtBRL},
+    {key:'reais_proj', label:DATA.file_info.periodo_atual+' R$ (Proj)', fmt:fmtBRL},
     {key:'reais_increm', label:'Increm R$', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtSignedBRL(v)+'</span>';}},
     {key:'repres', label:'Repres %', fmt:fmtPct},
   ];
@@ -1006,8 +1012,11 @@ function buildBrick(){
       {key:'keyA', label:'Brick', fmt:function(v){return esc(niceName(v));}},
       {key:'keyB', label:'Marca', fmt:function(v){return esc(niceName(v));}},
       {key:'unid_jun25', label:DATA.file_info.periodo_anterior+' Unid', fmt:fmtInt},
-      {key:'unid_proj', label:DATA.file_info.periodo_atual+' Unid', fmt:fmtInt},
+      {key:'unid_jun26', label:DATA.file_info.periodo_atual+' Unid ('+DATA.file_info.dias_coletados+'d)', fmt:fmtInt},
+      {key:'unid_proj', label:DATA.file_info.periodo_atual+' Unid (Proj)', fmt:fmtInt},
       {key:'unid_increm', label:'Increm Unid', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtSignedInt(v)+'</span>';}},
+      {key:'reais_jun26', label:DATA.file_info.periodo_atual+' R$ ('+DATA.file_info.dias_coletados+'d)', fmt:fmtBRL},
+      {key:'reais_proj', label:DATA.file_info.periodo_atual+' R$ (Proj)', fmt:fmtBRL},
       {key:'reais_increm', label:'Increm R$', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtSignedBRL(v)+'</span>';}},
   ];
 
@@ -1103,26 +1112,35 @@ function buildPeriodTab(elId, cfg){
   var setorIdx = setorIdxOf(currentSetor);
   var dataset = DATA.monthly_setor_marca;
 
-  var overall25={reais:0,unid:0}, overall26={reais:0,unid:0};
+  var overall25={reais:0,unid:0}, overall26={reais:0,unid:0}, overall26raw={reais:0,unid:0};
   var bySetor = {}, byMarca = {};
   dataset.forEach(function(row){
     if(setorIdx!=null && row.s!==setorIdx) return;
     var s25 = sumMonths(row.v, cfg.months, 25, cfg.applyProj);
     var s26 = sumMonths(row.v, cfg.months, 26, cfg.applyProj);
+    // s26raw: mesma soma do período, mas sem aplicar o fator de projeção no mês parcial --
+    // ou seja, o dado bruto (dias coletados) tal como está na planilha. Igual a s26 quando
+    // cfg.applyProj é falso (período sem mês parcial, ex.: Trimestre Abr-Mai-Jun).
+    var s26raw = cfg.applyProj ? sumMonths(row.v, cfg.months, 26, false) : s26;
     overall25.reais+=s25.reais; overall25.unid+=s25.unid;
     overall26.reais+=s26.reais; overall26.unid+=s26.unid;
-    if(!bySetor[row.s]) bySetor[row.s]={reais25:0,unid25:0,reais26:0,unid26:0};
+    overall26raw.reais+=s26raw.reais; overall26raw.unid+=s26raw.unid;
+    if(!bySetor[row.s]) bySetor[row.s]={reais25:0,unid25:0,reais26:0,unid26:0,reais26raw:0,unid26raw:0};
     bySetor[row.s].reais25+=s25.reais; bySetor[row.s].unid25+=s25.unid;
     bySetor[row.s].reais26+=s26.reais; bySetor[row.s].unid26+=s26.unid;
-    if(!byMarca[row.k]) byMarca[row.k]={reais25:0,unid25:0,reais26:0,unid26:0};
+    bySetor[row.s].reais26raw+=s26raw.reais; bySetor[row.s].unid26raw+=s26raw.unid;
+    if(!byMarca[row.k]) byMarca[row.k]={reais25:0,unid25:0,reais26:0,unid26:0,reais26raw:0,unid26raw:0};
     byMarca[row.k].reais25+=s25.reais; byMarca[row.k].unid25+=s25.unid;
     byMarca[row.k].reais26+=s26.reais; byMarca[row.k].unid26+=s26.unid;
+    byMarca[row.k].reais26raw+=s26raw.reais; byMarca[row.k].unid26raw+=s26raw.unid;
   });
 
   function withDelta(o){
     return Object.assign({}, o, {
       increm: round2(o.reais26-o.reais25),
       evol: o.reais25 ? (o.reais26-o.reais25)/o.reais25 : null,
+      unid_increm: Math.round(o.unid26-o.unid25),
+      unid_evol: o.unid25 ? (o.unid26-o.unid25)/o.unid25 : null,
     });
   }
   var setorRows = Object.keys(bySetor).map(function(k){
@@ -1190,25 +1208,38 @@ function buildPeriodTab(elId, cfg){
     columns: [
       {key:'mes', label:'Mês', fmt:function(v){return esc(v);}},
       {key:'r25', label:'2025', fmt:fmtBRL},
+    ].concat(cfg.applyProj ? [
+      {key:'r26_parcial', label:DATA.file_info.periodo_atual+' ('+DATA.file_info.dias_coletados+'d)', fmt:function(v,row){return row.isProjected ? fmtBRL(v) : '—';}},
+    ] : []).concat([
       {key:'r26', label:'2026 usado no '+(cfg.applyProj?'acumulado':'total'), fmt:function(v,row){return row.isProjected ? ('<b>'+fmtBRL(v)+'</b> <span class="badge">projetado</span>') : fmtBRL(v);}},
-    ],
+    ]),
     rows: monthlyTrend.map(function(t){ return Object.assign({}, t, {mes: MONTH_PT[t.month]}); })
   }));
   el.appendChild(cardMonthly);
 
+  // Unid/Reais column pair, shared by "Por Setor" and "Todas as marcas": quando o período
+  // inclui o mês parcial (cfg.applyProj), insere a coluna bruta (dias coletados) antes da
+  // coluna projetada; caso contrário (ex.: Trimestre Abr-Mai-Jun) mostra só o valor fechado.
+  function unidReaisCols(){
+    var u = [{key:'unid25', label:cfg.tituloPeriodo+' 2025 Unid', fmt:fmtInt}];
+    if(cfg.applyProj) u.push({key:'unid26raw', label:cfg.tituloPeriodo+' 2026 Unid ('+DATA.file_info.dias_coletados+'d)', fmt:fmtInt});
+    u.push({key:'unid26', label:cfg.tituloPeriodo+' 2026 Unid'+(cfg.applyProj?' (Proj)':''), fmt:fmtInt});
+    u.push({key:'unid_increm', label:'Increm Unid', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtSignedInt(v)+'</span>';}});
+    u.push({key:'unid_evol', label:'Evol % Unid', fmt:function(v){return v==null?'-':'<span class="'+signClass(v)+'">'+fmtPct(v)+'</span>';}});
+    var r = [{key:'reais25', label:cfg.tituloPeriodo+' 2025 R$', fmt:fmtBRL}];
+    if(cfg.applyProj) r.push({key:'reais26raw', label:cfg.tituloPeriodo+' 2026 R$ ('+DATA.file_info.dias_coletados+'d)', fmt:fmtBRL});
+    r.push({key:'reais26', label:cfg.tituloPeriodo+' 2026 R$'+(cfg.applyProj?' (Proj)':''), fmt:fmtBRL});
+    r.push({key:'increm', label:'Increm R$', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtSignedBRL(v)+'</span>';}});
+    r.push({key:'evol', label:'Evol % R$', fmt:function(v){return v==null?'-':'<span class="'+signClass(v)+'">'+fmtPct(v)+'</span>';}});
+    return u.concat(r);
+  }
+
   var card2 = document.createElement('div'); card2.className='card';
   card2.innerHTML = '<h2 class="h" style="margin-top:0">Por Setor</h2>';
   card2.appendChild(buildTable({
-    columns:[
-      {key:'setor', label:'Setor', fmt:function(v){return esc(niceName(v));}},
-      {key:'reais25', label:cfg.tituloPeriodo+' 2025', fmt:fmtBRL},
-      {key:'reais26', label:cfg.tituloPeriodo+' 2026', fmt:fmtBRL},
-      {key:'increm', label:'Increm R$', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtSignedBRL(v)+'</span>';}},
-      {key:'evol', label:'Evol %', fmt:function(v){return v==null?'-':'<span class="'+signClass(v)+'">'+fmtPct(v)+'</span>';}},
-      {key:'repres', label:'Repres %', fmt:fmtPct},
-    ],
+    columns: [{key:'setor', label:'Setor', fmt:function(v){return esc(niceName(v));}}].concat(unidReaisCols()).concat([{key:'repres', label:'Repres %', fmt:fmtPct}]),
     rows: setorRows.sort(function(a,b){return b.reais26-a.reais26;}),
-    totalRow: Object.assign({setor:'Total'}, withDelta({reais25:overall25.reais,unid25:overall25.unid,reais26:overall26.reais,unid26:overall26.unid}), {repres:1})
+    totalRow: Object.assign({setor:'Total'}, withDelta({reais25:overall25.reais,unid25:overall25.unid,reais26:overall26.reais,unid26:overall26.unid,reais26raw:overall26raw.reais,unid26raw:overall26raw.unid}), {repres:1})
   }));
   el.appendChild(card2);
 
@@ -1229,14 +1260,7 @@ function buildPeriodTab(elId, cfg){
   var card4 = document.createElement('div'); card4.className='card';
   card4.innerHTML = '<h2 class="h" style="margin-top:0">Todas as marcas</h2>';
   card4.appendChild(buildTable({
-    columns:[
-      {key:'marca', label:'Marca', fmt:function(v){return esc(niceName(v));}},
-      {key:'reais25', label:cfg.tituloPeriodo+' 2025', fmt:fmtBRL},
-      {key:'reais26', label:cfg.tituloPeriodo+' 2026', fmt:fmtBRL},
-      {key:'increm', label:'Increm R$', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtSignedBRL(v)+'</span>';}},
-      {key:'evol', label:'Evol %', fmt:function(v){return v==null?'-':'<span class="'+signClass(v)+'">'+fmtPct(v)+'</span>';}},
-      {key:'repres', label:'Repres %', fmt:fmtPct},
-    ],
+    columns: [{key:'marca', label:'Marca', fmt:function(v){return esc(niceName(v));}}].concat(unidReaisCols()).concat([{key:'repres', label:'Repres %', fmt:fmtPct}]),
     rows: marcaRows, searchable:true, defaultSortKey:'reais26'
   }));
   el.appendChild(card4);
