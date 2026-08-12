@@ -541,8 +541,15 @@ function pdvBreakdown(filterFn, setorFilterIdx){
 
 function pdvMiniTable(pdvRows, opts, expanded, tableId){
   opts = opts||{};
+  var pdvFilter = opts.pdvFilterFn ? opts.pdvFilterFn() : null;
+  if(pdvFilter){
+    pdvRows = (pdvRows||[]).filter(function(p){ return String(p.pdv||'').toLowerCase().indexOf(pdvFilter.toLowerCase())>-1; });
+  }
   if(!pdvRows || !pdvRows.length){
-    return '<div style="padding:4px 0;color:var(--text-secondary);font-size:12px">Nenhum PDV com venda encontrado para este recorte'+(opts.showSetor===false?'':' (dentro do setor selecionado, se houver filtro ativo)')+'.</div>';
+    return '<div style="padding:4px 0;color:var(--text-secondary);font-size:12px">'+
+      (pdvFilter ? 'Nenhum PDV corresponde à busca "'+esc(pdvFilter)+'" neste recorte.' :
+        ('Nenhum PDV com venda encontrado para este recorte'+(opts.showSetor===false?'':' (dentro do setor selecionado, se houver filtro ativo)')+'.'))+
+      '</div>';
   }
   var showSetor = opts.showSetor!==false && currentSetor==='Todos';
   var showBrick = opts.showBrick!==false;
@@ -602,9 +609,16 @@ function nestedSetorPdvRenderer(finalOpts){
     if(!pdvRows || !pdvRows.length){
       return '<div style="padding:4px 0;color:var(--text-secondary);font-size:12px">Nenhum PDV com venda encontrado para este recorte.</div>';
     }
+    var pdvFilter = finalOpts.pdvFilterFn ? finalOpts.pdvFilterFn() : null;
     var tableId = parentRid+'_setorTable';
     var sortInfo = miniSortState(expanded, tableId, 'reais_proj', true);
-    var setorRows = miniSortedRows(groupPdvBySetor(pdvRows), sortInfo);
+    var allSetorRows = miniSortedRows(groupPdvBySetor(pdvRows), sortInfo);
+    var setorRows = pdvFilter ? allSetorRows.filter(function(s){
+      return s.pdvs.some(function(p){ return String(p.pdv||'').toLowerCase().indexOf(pdvFilter.toLowerCase())>-1; });
+    }) : allSetorRows;
+    if(pdvFilter && !setorRows.length){
+      return '<div style="padding:4px 0;color:var(--text-secondary);font-size:12px">Nenhum PDV corresponde à busca "'+esc(pdvFilter)+'" neste recorte.</div>';
+    }
     var countNote = setorRows.length+' setor(es) compõem este total (clique num setor para ver os PDVs; clique num cabeçalho para ordenar):';
     var html = '<div style="font-size:11.5px;color:var(--text-secondary);margin-bottom:4px">'+countNote+'</div>'+
       '<div class="tbl-wrap"><table class="dtable mini"><thead><tr>'+
@@ -614,6 +628,7 @@ function nestedSetorPdvRenderer(finalOpts){
       '</tr></thead><tbody>';
     setorRows.forEach(function(s){
       var subRid = parentRid+'_setor_'+String(s.setor).replace(/[^a-z0-9]/gi,'');
+      if(pdvFilter) expanded[subRid] = true;
       var isOpen = !!expanded[subRid];
       html += '<tr>'+
         '<td style="text-align:left"><span class="expand-btn" data-rid="'+subRid+'">'+(isOpen?'▼':'▶')+'</span>'+esc(niceName(s.setor))+'</td>'+
@@ -631,7 +646,6 @@ function nestedSetorPdvRenderer(finalOpts){
   };
 }
 var marcaSetorPdvRenderer = nestedSetorPdvRenderer({});
-var bandeiraSetorPdvRenderer = nestedSetorPdvRenderer({showBandeira:false});
 
 // ================= app state =================
 var currentSetor = 'Todos';
@@ -824,22 +838,131 @@ function buildRankingPdv(){
   el.appendChild(card);
 
   var card2 = document.createElement('div'); card2.className='card';
-  card2.innerHTML = '<h2 class="h" style="margin-top:0">Todas as redes</h2><p class="desc">Clique na seta para ver o consolidado por Setor; clique num Setor para ver os PDVs (lojas) daquela rede naquele setor, e em qual Brick cada um está.</p>';
-  var tbl = buildTable({
-    columns:[
-      {key:'bandeira', label:'Rede (Bandeira)', fmt:function(v){return esc(v);}},
-      {key:'unid_jun25', label:DATA.file_info.periodo_anterior+' Unid', fmt:fmtInt},
-      {key:'unid_proj', label:DATA.file_info.periodo_atual+' Unid', fmt:fmtInt},
-      {key:'unid_increm', label:'Increm Unid', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtSignedInt(v)+'</span>';}},
-      {key:'reais_proj', label:DATA.file_info.periodo_atual+' R$', fmt:fmtBRL},
-      {key:'reais_increm', label:'Increm R$', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtSignedBRL(v)+'</span>';}},
-      {key:'repres', label:'Repres %', fmt:fmtPct},
-    ],
-    rows: rows, childKey:'pdvs', childRenderer:bandeiraSetorPdvRenderer, searchable:true, defaultSortKey:'reais_proj',
+  card2.innerHTML = '<h2 class="h" style="margin-top:0">Todas as redes</h2><p class="desc">Clique na seta para ver o consolidado por Setor; clique num Setor para ver os PDVs (lojas) daquela rede naquele setor, e em qual Brick cada um está. Use a busca por PDV / CNPJ para localizar uma loja específica &mdash; a maioria dos códigos de PDV traz o CNPJ como sufixo de 14 dígitos.</p>';
+  card2.appendChild(buildRankingPdvTable(rows, {
     totalRow: setorIdx==null ? Object.assign({bandeira:'Total Geral'}, DATA.ranking_pdv_total) : Object.assign({bandeira:'Total do setor'}, DATA.setores.find(function(s){return s.setor===currentSetor;}))
-  });
-  card2.appendChild(tbl);
+  }));
   el.appendChild(card2);
+}
+
+// "Todas as redes" table for Ranking PDV: like buildTable, but with two independent
+// search boxes side by side (Rede and PDV/CNPJ) instead of buildTable's single searchable box.
+// A PDV/CNPJ match auto-expands the matching Rede -> Setor rows and filters the PDV list
+// at the bottom to only the matching store(s), since most PDV codes embed the CNPJ as a
+// 14-digit suffix (e.g. "DROGARIA PACHECO - 33438250018880").
+function buildRankingPdvTable(rows, opts){
+  opts = opts || {};
+  var box = document.createElement('div');
+  var redeVal = '', pdvVal = '';
+  var sortKey = 'reais_proj', sortDesc = true;
+  var expanded = {};
+  var columns = [
+    {key:'bandeira', label:'Rede (Bandeira)', fmt:function(v){return esc(v);}},
+    {key:'unid_jun25', label:DATA.file_info.periodo_anterior+' Unid', fmt:fmtInt},
+    {key:'unid_proj', label:DATA.file_info.periodo_atual+' Unid', fmt:fmtInt},
+    {key:'unid_increm', label:'Increm Unid', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtSignedInt(v)+'</span>';}},
+    {key:'reais_proj', label:DATA.file_info.periodo_atual+' R$', fmt:fmtBRL},
+    {key:'reais_increm', label:'Increm R$', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtSignedBRL(v)+'</span>';}},
+    {key:'repres', label:'Repres %', fmt:fmtPct},
+  ];
+  var childRenderer = nestedSetorPdvRenderer({showBandeira:false, pdvFilterFn:function(){return pdvVal;}});
+
+  function rowMatchesRede(row){
+    if(!redeVal) return true;
+    return String(row.bandeira||'').toLowerCase().indexOf(redeVal.toLowerCase())>-1;
+  }
+  function rowMatchesPdv(row){
+    if(!pdvVal) return true;
+    var needle = pdvVal.toLowerCase();
+    return (row.pdvs||[]).some(function(p){ return String(p.pdv||'').toLowerCase().indexOf(needle)>-1; });
+  }
+
+  function render(){
+    var sorted = rows.slice();
+    sorted.sort(function(a,b){
+      var av=a[sortKey], bv=b[sortKey];
+      if(av==null) av=-Infinity; if(bv==null) bv=-Infinity;
+      if(typeof av==='string') return sortDesc? String(bv).localeCompare(av) : String(av).localeCompare(bv);
+      return sortDesc? (bv-av) : (av-bv);
+    });
+    var visRows = sorted.filter(function(r){ return rowMatchesRede(r) && rowMatchesPdv(r); });
+
+    var html = '<div class="tbl-wrap"><table class="dtable"><thead><tr>';
+    columns.forEach(function(c){
+      html += '<th data-k="'+c.key+'" class="'+(sortKey===c.key?'sorted':'')+'">'+esc(c.label)+(sortKey===c.key?(sortDesc?' ▼':' ▲'):'')+'</th>';
+    });
+    html += '</tr></thead><tbody>';
+    visRows.forEach(function(row, idx){
+      var hasChildren = row.pdvs && row.pdvs.length;
+      var rid = 'r'+idx+'_'+(row.bandeira||'').replace(/[^a-z0-9]/gi,'');
+      if(pdvVal && hasChildren && rowMatchesPdv(row)) expanded[rid] = true;
+      var isOpen = !!expanded[rid];
+      html += '<tr>';
+      columns.forEach(function(c,ci){
+        var v = row[c.key];
+        var content = c.fmt ? c.fmt(v,row) : esc(v);
+        if(ci===0 && hasChildren){
+          content = '<span class="expand-btn" data-rid="'+rid+'">'+(isOpen?'▼':'▶')+'</span>'+content;
+        } else if(ci===0){
+          content = '<span style="display:inline-block;width:18px"></span>'+content;
+        }
+        html += '<td>'+content+'</td>';
+      });
+      html += '</tr>';
+      if(hasChildren && isOpen){
+        html += '<tr class="child-detail"><td colspan="'+columns.length+'">'+childRenderer(row.pdvs, row, expanded, rid)+'</td></tr>';
+      }
+    });
+    if(opts.totalRow){
+      html += '<tr class="total">';
+      columns.forEach(function(c){
+        var v = opts.totalRow[c.key];
+        html += '<td>'+(c.fmt?c.fmt(v,opts.totalRow):esc(v))+'</td>';
+      });
+      html += '</tr>';
+    }
+    html += '</tbody></table></div>';
+
+    box.innerHTML = '<div class="searchbar" style="flex-wrap:wrap">'+
+      '<input type="search" placeholder="Buscar rede..." id="redeSearch" value="'+esc(redeVal)+'" style="min-width:200px">'+
+      '<input type="search" placeholder="Buscar PDV / CNPJ..." id="pdvCodeSearch" value="'+esc(pdvVal)+'" style="min-width:220px">'+
+      '<span class="badge">'+visRows.length+' de '+rows.length+'</span>'+
+      '</div>'+html;
+
+    var redeInp = box.querySelector('#redeSearch');
+    redeInp.addEventListener('input', function(){ redeVal = redeInp.value; render(); redeInp.focus(); redeInp.setSelectionRange(redeInp.value.length, redeInp.value.length); });
+    var pdvInp = box.querySelector('#pdvCodeSearch');
+    pdvInp.addEventListener('input', function(){ pdvVal = pdvInp.value; render(); pdvInp.focus(); pdvInp.setSelectionRange(pdvInp.value.length, pdvInp.value.length); });
+
+    box.querySelectorAll('th[data-k]').forEach(function(th){
+      th.addEventListener('click', function(){
+        var k = th.getAttribute('data-k');
+        if(sortKey===k) sortDesc=!sortDesc; else { sortKey=k; sortDesc=true; }
+        render();
+      });
+    });
+    box.querySelectorAll('.expand-btn').forEach(function(btn){
+      btn.addEventListener('click', function(e){
+        e.stopPropagation();
+        var rid = btn.getAttribute('data-rid');
+        expanded[rid] = !expanded[rid];
+        render();
+      });
+    });
+    box.querySelectorAll('th[data-sk]').forEach(function(th){
+      th.addEventListener('click', function(e){
+        e.stopPropagation();
+        var tid = th.getAttribute('data-st'), k = th.getAttribute('data-sk');
+        var skey = 'sort:'+tid;
+        var cur = expanded[skey] || {};
+        if(cur.key===k) cur.desc = !cur.desc; else { cur = {key:k, desc:true}; }
+        expanded[skey] = cur;
+        render();
+      });
+    });
+  }
+  render();
+  return box;
 }
 
 // ================= build: Mapa Trimestral =================
