@@ -560,10 +560,19 @@ function pdvMiniTable(pdvRows, opts, expanded, tableId){
   var countNote = pdvRows.length+' PDV(s) compõem este total (clique num cabeçalho para ordenar'+(pdvRows.length>10?'; role a lista para ver todos':'')+'):';
   var html = '<div style="font-size:11.5px;color:var(--text-secondary);margin-bottom:4px">'+countNote+'</div>'+
     '<div class="tbl-wrap" style="max-height:340px;overflow-y:auto"><table class="dtable mini"><thead><tr>'+
-    (showSetor?miniTh('Setor','setor',tableId,sortInfo):'')+miniTh('PDV','pdv',tableId,sortInfo)+
-    (showBrick?miniTh('Brick','brick',tableId,sortInfo):'')+(showBandeira?miniTh('Rede (Bandeira)','bandeira',tableId,sortInfo):'')+
-    miniTh(DATA.file_info.periodo_anterior+' Unid','unid_jun25',tableId,sortInfo)+miniTh(DATA.file_info.periodo_atual+' Unid','unid_proj',tableId,sortInfo)+
-    miniTh(DATA.file_info.periodo_atual+' R$','reais_proj',tableId,sortInfo)+miniTh('Increm R$','reais_increm',tableId,sortInfo)+
+    (showSetor?miniTh('Setor','setor',tableId,sortInfo):'')+
+    miniTh('PDV','pdv',tableId,sortInfo)+
+    (showBrick?miniTh('Brick','brick',tableId,sortInfo):'')+
+    (showBandeira?miniTh('Rede (Bandeira)','bandeira',tableId,sortInfo):'')+
+    miniTh(DATA.file_info.periodo_anterior+' Unid','unid_jun25',tableId,sortInfo)+
+    miniTh(DATA.file_info.periodo_atual+' Unid ('+DATA.file_info.dias_coletados+'d)','unid_jun26',tableId,sortInfo)+
+    miniTh(DATA.file_info.periodo_atual+' Unid (Proj)','unid_proj',tableId,sortInfo)+
+    miniTh('Increm Unid','unid_increm',tableId,sortInfo)+
+    miniTh('Evol % Unid','unid_evol',tableId,sortInfo)+
+    miniTh(DATA.file_info.periodo_anterior+' R$','reais_jun25',tableId,sortInfo)+
+    miniTh(DATA.file_info.periodo_atual+' R$ ('+DATA.file_info.dias_coletados+'d)','reais_jun26',tableId,sortInfo)+
+    miniTh(DATA.file_info.periodo_atual+' R$ (Proj)','reais_proj',tableId,sortInfo)+
+    miniTh('Increm R$','reais_increm',tableId,sortInfo)+
     '</tr></thead><tbody>';
   shown.forEach(function(p){
     html += '<tr>'+
@@ -571,7 +580,14 @@ function pdvMiniTable(pdvRows, opts, expanded, tableId){
       '<td style="text-align:left">'+esc(p.pdv)+'</td>'+
       (showBrick?'<td style="text-align:left">'+esc(niceName(p.brick))+'</td>':'')+
       (showBandeira?'<td style="text-align:left">'+esc(p.bandeira)+'</td>':'')+
-      '<td>'+fmtInt(p.unid_jun25)+'</td><td>'+fmtInt(p.unid_proj)+'</td><td>'+fmtBRL(p.reais_proj)+'</td>'+
+      '<td>'+fmtInt(p.unid_jun25)+'</td>'+
+      '<td>'+fmtInt(p.unid_jun26)+'</td>'+
+      '<td>'+fmtInt(p.unid_proj)+'</td>'+
+      '<td><span class="'+signClass(p.unid_increm)+'">'+fmtSignedInt(p.unid_increm)+'</span></td>'+
+      '<td>'+(p.unid_evol==null?'-':'<span class="'+signClass(p.unid_evol)+'">'+fmtPct(p.unid_evol)+'</span>')+'</td>'+
+      '<td>'+fmtBRL(p.reais_jun25)+'</td>'+
+      '<td>'+fmtBRL(p.reais_jun26)+'</td>'+
+      '<td>'+fmtBRL(p.reais_proj)+'</td>'+
       '<td><span class="'+signClass(p.reais_increm)+'">'+fmtSignedBRL(p.reais_increm)+'</span></td>'+
       '</tr>';
   });
@@ -1037,7 +1053,7 @@ function brickMarcaRenderer(marcaRows, parentRow, expanded, parentRid){
       '</tr>';
     if(isOpen){
       html += '<tr><td colspan="10" style="background:var(--surface-2);padding:6px 6px 10px 24px">'+
-        pdvMiniTable(m.pdvs, {showBrick:false}, expanded, subRid+'_pdvTable') +
+        pdvMiniTable(m.pdvs, {showBrick:false, showSetor:false, showBandeira:false}, expanded, subRid+'_pdvTable') +
         '</td></tr>';
     }
   });
