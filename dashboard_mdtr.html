@@ -573,6 +573,7 @@ function pdvMiniTable(pdvRows, opts, expanded, tableId){
     miniTh(DATA.file_info.periodo_atual+' R$ ('+DATA.file_info.dias_coletados+'d)','reais_jun26',tableId,sortInfo)+
     miniTh(DATA.file_info.periodo_atual+' R$ (Proj)','reais_proj',tableId,sortInfo)+
     miniTh('Increm R$','reais_increm',tableId,sortInfo)+
+    miniTh('Evol % R$','reais_evol',tableId,sortInfo)+
     '</tr></thead><tbody>';
   shown.forEach(function(p){
     html += '<tr>'+
@@ -589,6 +590,7 @@ function pdvMiniTable(pdvRows, opts, expanded, tableId){
       '<td>'+fmtBRL(p.reais_jun26)+'</td>'+
       '<td>'+fmtBRL(p.reais_proj)+'</td>'+
       '<td><span class="'+signClass(p.reais_increm)+'">'+fmtSignedBRL(p.reais_increm)+'</span></td>'+
+      '<td>'+(p.reais_evol==null?'-':'<span class="'+signClass(p.reais_evol)+'">'+fmtPct(p.reais_evol)+'</span>')+'</td>'+
       '</tr>';
   });
   html += '</tbody></table></div>';
@@ -643,11 +645,12 @@ function nestedSetorPdvRenderer(finalOpts){
       miniTh(DATA.file_info.periodo_atual+' Unid ('+DATA.file_info.dias_coletados+'d)','unid_jun26',tableId,sortInfo)+
       miniTh(DATA.file_info.periodo_atual+' Unid (Proj)','unid_proj',tableId,sortInfo)+
       miniTh('Increm Unid','unid_increm',tableId,sortInfo)+
-      miniTh('Evol %','unid_evol',tableId,sortInfo)+
+      miniTh('Evol % Unid','unid_evol',tableId,sortInfo)+
       miniTh(DATA.file_info.periodo_anterior+' R$','reais_jun25',tableId,sortInfo)+
       miniTh(DATA.file_info.periodo_atual+' R$ ('+DATA.file_info.dias_coletados+'d)','reais_jun26',tableId,sortInfo)+
       miniTh(DATA.file_info.periodo_atual+' R$ (Proj)','reais_proj',tableId,sortInfo)+
       miniTh('Increm R$','reais_increm',tableId,sortInfo)+
+      miniTh('Evol % R$','reais_evol',tableId,sortInfo)+
       miniTh('Repres %','repres',tableId,sortInfo)+
       '</tr></thead><tbody>';
     setorRows.forEach(function(s){
@@ -666,10 +669,11 @@ function nestedSetorPdvRenderer(finalOpts){
         '<td>'+fmtBRL(s.reais_jun26)+'</td>'+
         '<td>'+fmtBRL(s.reais_proj)+'</td>'+
         '<td><span class="'+signClass(s.reais_increm)+'">'+fmtSignedBRL(s.reais_increm)+'</span></td>'+
+        '<td>'+(s.reais_evol==null?'-':'<span class="'+signClass(s.reais_evol)+'">'+fmtPct(s.reais_evol)+'</span>')+'</td>'+
         '<td>'+(repres==null?'-':fmtPct(repres))+'</td>'+
         '</tr>';
       if(isOpen){
-        html += '<tr><td colspan="11" style="background:var(--surface-2);padding:6px 6px 10px 24px">'+
+        html += '<tr><td colspan="12" style="background:var(--surface-2);padding:6px 6px 10px 24px">'+
           pdvMiniTable(s.pdvs, Object.assign({showSetor:false}, finalOpts), expanded, subRid+'_pdvTable') +
           '</td></tr>';
       }
@@ -825,11 +829,12 @@ function buildRankingMarcas(){
       {key:'unid_jun26', label:DATA.file_info.periodo_atual+' Unid ('+DATA.file_info.dias_coletados+'d)', fmt:fmtInt},
       {key:'unid_proj', label:DATA.file_info.periodo_atual+' Unid (Proj)', fmt:fmtInt},
       {key:'unid_increm', label:'Increm Unid', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtSignedInt(v)+'</span>';}},
-      {key:'unid_evol', label:'Evol %', fmt:function(v){return v==null?'-':'<span class="'+signClass(v)+'">'+fmtPct(v)+'</span>';}},
+      {key:'unid_evol', label:'Evol % Unid', fmt:function(v){return v==null?'-':'<span class="'+signClass(v)+'">'+fmtPct(v)+'</span>';}},
       {key:'reais_jun25', label:DATA.file_info.periodo_anterior+' R$', fmt:fmtBRL},
       {key:'reais_jun26', label:DATA.file_info.periodo_atual+' R$ ('+DATA.file_info.dias_coletados+'d)', fmt:fmtBRL},
       {key:'reais_proj', label:DATA.file_info.periodo_atual+' R$ (Proj)', fmt:fmtBRL},
       {key:'reais_increm', label:'Increm R$', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtSignedBRL(v)+'</span>';}},
+      {key:'reais_evol', label:'Evol % R$', fmt:function(v){return v==null?'-':'<span class="'+signClass(v)+'">'+fmtPct(v)+'</span>';}},
       {key:'repres', label:'Repres %', fmt:fmtPct},
     ],
     rows: rows, childKey:'pdvs', childRenderer:marcaSetorPdvRenderer, searchable:true, defaultSortKey:'unid_increm', defaultSortDesc:false,
@@ -907,6 +912,7 @@ function buildRankingPdvTable(rows, opts){
     {key:'reais_jun26', label:DATA.file_info.periodo_atual+' R$ ('+DATA.file_info.dias_coletados+'d)', fmt:fmtBRL},
     {key:'reais_proj', label:DATA.file_info.periodo_atual+' R$ (Proj)', fmt:fmtBRL},
     {key:'reais_increm', label:'Increm R$', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtSignedBRL(v)+'</span>';}},
+    {key:'reais_evol', label:'Evol % R$', fmt:function(v){return v==null?'-':'<span class="'+signClass(v)+'">'+fmtPct(v)+'</span>';}},
     {key:'repres', label:'Repres %', fmt:fmtPct},
   ];
   var childRenderer = nestedSetorPdvRenderer({showBandeira:false, pdvFilterFn:function(){return pdvVal;}});
@@ -1035,6 +1041,7 @@ function brickMarcaRenderer(marcaRows, parentRow, expanded, parentRid){
     miniTh(DATA.file_info.periodo_atual+' R$ ('+DATA.file_info.dias_coletados+'d)','reais_jun26',tableId,sortInfo)+
     miniTh(DATA.file_info.periodo_atual+' R$ (Proj)','reais_proj',tableId,sortInfo)+
     miniTh('Increm R$','reais_increm',tableId,sortInfo)+
+    miniTh('Evol % R$','reais_evol',tableId,sortInfo)+
     '</tr></thead><tbody>';
   rows.forEach(function(m){
     var subRid = parentRid+'_marca_'+String(m.keyB).replace(/[^a-z0-9]/gi,'');
@@ -1050,9 +1057,10 @@ function brickMarcaRenderer(marcaRows, parentRow, expanded, parentRid){
       '<td>'+fmtBRL(m.reais_jun26)+'</td>'+
       '<td>'+fmtBRL(m.reais_proj)+'</td>'+
       '<td><span class="'+signClass(m.reais_increm)+'">'+fmtSignedBRL(m.reais_increm)+'</span></td>'+
+      '<td>'+(m.reais_evol==null?'-':'<span class="'+signClass(m.reais_evol)+'">'+fmtPct(m.reais_evol)+'</span>')+'</td>'+
       '</tr>';
     if(isOpen){
-      html += '<tr><td colspan="10" style="background:var(--surface-2);padding:6px 6px 10px 24px">'+
+      html += '<tr><td colspan="11" style="background:var(--surface-2);padding:6px 6px 10px 24px">'+
         pdvMiniTable(m.pdvs, {showBrick:false, showSetor:false, showBandeira:false}, expanded, subRid+'_pdvTable') +
         '</td></tr>';
     }
@@ -1100,6 +1108,7 @@ function buildBrick(){
       {key:'reais_jun26', label:DATA.file_info.periodo_atual+' R$ ('+DATA.file_info.dias_coletados+'d)', fmt:fmtBRL},
       {key:'reais_proj', label:DATA.file_info.periodo_atual+' R$ (Proj)', fmt:fmtBRL},
       {key:'reais_increm', label:'Increm R$', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtSignedBRL(v)+'</span>';}},
+      {key:'reais_evol', label:'Evol % R$', fmt:function(v){return v==null?'-':'<span class="'+signClass(v)+'">'+fmtPct(v)+'</span>';}},
   ];
 
   var card = document.createElement('div'); card.className='card';
