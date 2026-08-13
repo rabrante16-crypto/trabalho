@@ -133,11 +133,9 @@
   <section class="panel" id="panel-visao"></section>
   <section class="panel" id="panel-marcas"></section>
   <section class="panel" id="panel-pdv"></section>
-  <section class="panel" id="panel-tri"></section>
   <section class="panel" id="panel-brick"></section>
   <section class="panel" id="panel-outras"></section>
   <section class="panel" id="panel-ytd"></section>
-  <section class="panel" id="panel-trimestre"></section>
   <section class="panel" id="panel-estrategia"></section>
   <section class="panel" id="panel-metodologia"></section>
   <footer class="foot">
@@ -997,20 +995,6 @@ function buildRankingPdvTable(rows, opts){
   return box;
 }
 
-// ================= build: Trimestre (Jun-Jul-Ago) =================
-// Substitui a antiga aba "Mapa Trimestral" (fonte MAPA TRI, comparava Ago-Set-Out/24 x /25 -- período
-// desalinhado do resto do dashboard). Agora compara Jun-Jul-Ago/25 x Jun-Jul-Ago/26, com Agosto/26
-// projetado a partir dos dias coletados, na mesma base QUERY e mesma metodologia das demais abas.
-function buildTrimestreJunAgo(){
-  buildPeriodTab('panel-tri', {
-    months: [6,7,8],
-    tituloPeriodo: 'Trimestre (Jun-Jul-Ago)',
-    applyProj: true,
-    descricao: 'Acumulado de Junho, Julho e Agosto de 2025 comparado com o mesmo trimestre de 2026 (Junho e Julho fechados; Agosto/26 é a projeção do mês cheio a partir dos '+DATA.file_info.dias_coletados+' dias coletados).',
-    notaProjecao: 'Agosto/26 está com apenas '+DATA.file_info.dias_coletados+' dias de coleta; o valor usado neste trimestre é a projeção do mês cheio (parcial &times; '+DATA.file_info.dias_mes+'/'+DATA.file_info.dias_coletados+'), para manter a comparação justa com Jun-Jul-Ago/25 (todos meses cheios).'
-  });
-}
-
 // ================= build: Marcas em decremento por Brick =================
 function buildBrick(){
   var el = document.getElementById('panel-brick');
@@ -1110,7 +1094,7 @@ function buildOutras(){
   el.appendChild(card5);
 }
 
-// ================= período (YTD / Trimestre) — dados mensais em Reais, a partir da planilha mensal =================
+// ================= período (YTD) — dados mensais em Reais, a partir da planilha mensal =================
 // DATA.monthly_setor_marca / monthly_setor_bandeira: [{s:setorIdx, k:dimIdx, v:[32 valores]}]
 // v: 16 valores de 2025 (Jan..Ago, Real/Unidade intercalados) seguidos de 16 valores de 2026 (idem).
 var MONTH_PT = {1:'Jan',2:'Fev',3:'Mar',4:'Abr',5:'Mai',6:'Jun',7:'Jul',8:'Ago'};
@@ -1143,7 +1127,7 @@ function buildPeriodTab(elId, cfg){
     var s26 = sumMonths(row.v, cfg.months, 26, cfg.applyProj);
     // s26raw: mesma soma do período, mas sem aplicar o fator de projeção no mês parcial --
     // ou seja, o dado bruto (dias coletados) tal como está na planilha. Igual a s26 quando
-    // cfg.applyProj é falso (período sem mês parcial, ex.: Trimestre Abr-Mai-Jun).
+    // cfg.applyProj é falso (período sem mês parcial).
     var s26raw = cfg.applyProj ? sumMonths(row.v, cfg.months, 26, false) : s26;
     overall25.reais+=s25.reais; overall25.unid+=s25.unid;
     overall26.reais+=s26.reais; overall26.unid+=s26.unid;
@@ -1242,7 +1226,7 @@ function buildPeriodTab(elId, cfg){
 
   // Unid/Reais column pair, shared by "Por Setor" and "Todas as marcas": quando o período
   // inclui o mês parcial (cfg.applyProj), insere a coluna bruta (dias coletados) antes da
-  // coluna projetada; caso contrário (ex.: Trimestre Abr-Mai-Jun) mostra só o valor fechado.
+  // coluna projetada; caso contrário mostra só o valor fechado.
   function unidReaisCols(){
     var u = [{key:'unid25', label:cfg.tituloPeriodo+' 2025 Unid', fmt:fmtInt}];
     if(cfg.applyProj) u.push({key:'unid26raw', label:cfg.tituloPeriodo+' 2026 Unid ('+DATA.file_info.dias_coletados+'d)', fmt:fmtInt});
@@ -1296,14 +1280,6 @@ function buildYTD(){
     applyProj: true,
     descricao: 'Acumulado de Janeiro a Agosto de 2025 comparado com o acumulado de 2026 (Jan-Jul fechados; Agosto/26 é a projeção do mês cheio a partir dos '+DATA.file_info.dias_coletados+' dias coletados).',
     notaProjecao: 'Agosto/26 está com apenas '+DATA.file_info.dias_coletados+' dias de coleta; o valor usado no acumulado 2026 é a projeção do mês cheio (parcial &times; '+DATA.file_info.dias_mes+'/'+DATA.file_info.dias_coletados+'), para manter a comparação justa com o YTD 2025 (Jan-Ago, todos meses cheios).'
-  });
-}
-
-function buildTrimestre(){
-  buildPeriodTab('panel-trimestre', {
-    months: [4,5,6],
-    tituloPeriodo: 'Trimestre (Abr-Mai-Jun)',
-    descricao: 'Acumulado de Abril, Maio e Junho de 2025 comparado com o mesmo trimestre de 2026 (ambos meses cheios).'
   });
 }
 
@@ -1397,11 +1373,10 @@ function buildMetodologia(){
   el.innerHTML = '<h2 class="h">Metodologia e notas de leitura</h2>'+
     '<div class="note"><b>Arquivo de origem:</b> '+esc(DATA.file_info.nome_arquivo)+'<br>'+
     '<b>Distrital:</b> '+esc(niceName(DATA.file_info.distrital))+' (código '+esc(DATA.file_info.distrital.split(' - ')[0])+')<br>'+
-    '<b>Abas consideradas:</b> aba <b>QUERY</b> da planilha mensal (01MDTR_MENSAL), linha a linha, para todas as abas do dashboard (Visão Geral, Ranking de Marcas, Ranking de PDV, Decremento por Brick, Outras Dimensões, Trimestre (Jun-Ago), YTD, Trimestre (Abr-Jun) e Análise Estratégica).</div>'+
-    '<div class="note"><b>Projeção de '+DATA.file_info.periodo_atual+' (mês parcial):</b> a planilha mensal mais recente chegou com apenas <b>'+DATA.file_info.dias_coletados+' dias de coleta</b> em '+DATA.file_info.periodo_atual+'. Para permitir uma leitura de "indicadores gerais" comparável a um mês fechado, todas as abas deste dashboard que incluem Agosto (Visão Geral, Ranking de Marcas, Ranking de PDV, Decremento por Brick, Outras Dimensões, Trimestre (Jun-Ago), YTD e Análise Estratégica) aplicam o mesmo fator de projeção do mês cheio sobre o valor parcial coletado: <b>parcial &times; '+DATA.file_info.dias_mes+'/'+DATA.file_info.dias_coletados+'</b> (&asymp; &times;'+(Math.round(DATA.file_info.proj_factor*100)/100)+'). Os valores de '+DATA.file_info.periodo_anterior+' não sofrem nenhum ajuste (mês já fechado); as colunas "Increm"/"Evol %" comparam a projeção de '+DATA.file_info.periodo_atual+' contra o real de '+DATA.file_info.periodo_anterior+'. A aba Trimestre (Abr-Mai-Jun) não é afetada, pois não inclui Agosto.</div>'+
+    '<b>Abas consideradas:</b> aba <b>QUERY</b> da planilha mensal (01MDTR_MENSAL), linha a linha, para todas as abas do dashboard (Visão Geral, Ranking de Marcas, Ranking de PDV, Decremento por Brick, Outras Dimensões, YTD e Análise Estratégica).</div>'+
+    '<div class="note"><b>Projeção de '+DATA.file_info.periodo_atual+' (mês parcial):</b> a planilha mensal mais recente chegou com apenas <b>'+DATA.file_info.dias_coletados+' dias de coleta</b> em '+DATA.file_info.periodo_atual+'. Para permitir uma leitura de "indicadores gerais" comparável a um mês fechado, todas as abas deste dashboard aplicam o mesmo fator de projeção do mês cheio sobre o valor parcial coletado: <b>parcial &times; '+DATA.file_info.dias_mes+'/'+DATA.file_info.dias_coletados+'</b> (&asymp; &times;'+(Math.round(DATA.file_info.proj_factor*100)/100)+'). Os valores de '+DATA.file_info.periodo_anterior+' não sofrem nenhum ajuste (mês já fechado); as colunas "Increm"/"Evol %" comparam a projeção de '+DATA.file_info.periodo_atual+' contra o real de '+DATA.file_info.periodo_anterior+'.</div>'+
     '<div class="note"><b>Visão Geral, Ranking de Marcas, Ranking de PDV e Decremento por Brick:</b> recalculados diretamente da aba QUERY, linha a linha, tanto para "Todos os setores" quanto para um setor específico &mdash; não dependem mais de tabelas dinâmicas pré-calculadas do Excel, o que também elimina qualquer inconsistência de detalhamento por setor entre o total geral e a visão filtrada.</div>'+
     '<div class="note"><b>Filtro de Setor:</b> o seletor no topo da página recalcula, na hora, todas as abas deste dashboard a partir dos dados linha a linha da aba QUERY, sem exceção.</div>'+
-    '<div class="note"><b>Trimestre (Jun-Ago):</b> substitui a antiga aba "Mapa Trimestral" (que usava a aba MAPA TRI do arquivo de auditoria original e comparava Ago&ndash;Set&ndash;Out/24 x Ago&ndash;Set&ndash;Out/25, um período desalinhado do restante do dashboard). Agora compara Junho, Julho e Agosto de 2025 com o mesmo trimestre de 2026 &mdash; Agosto/26 projetado como em todas as demais abas &mdash; usando a mesma base QUERY.</div>'+
     '<div class="note"><b>Aba MARCAS EM DECREMENTO POR BRICK:</b> a tabela dinâmica original dessa aba estava configurada com quebra por Setor, não por Marca/Brick como o nome sugere. Para entregar a análise pretendida, este dashboard recalcula o decremento por Brick × Marca diretamente da aba QUERY (ver aba "Decremento por Brick").</div>'+
     '<div class="note"><b>Análise Estratégica:</b> as "ações sugeridas" para Bricks e Marcas são heurísticas simples baseadas nos limiares de evolução % e materialidade (representatividade no faturamento), geradas automaticamente a partir dos dados. Servem como ponto de partida para priorização, não substituem o conhecimento do gestor sobre o território.</div>'+
     '<div class="note"><b>Universo x vendas:</b> a planilha mensal cadastra '+fmtInt(DATA.meta.total_rows)+' combinações Brick × PDV × Marca (o universo potencial de venda do distrital); '+fmtInt(DATA.meta.rows_with_sales)+' delas registraram alguma venda (unidades ou reais) no período analisado. Contagens de "Bricks", "Marcas", "PDVs" e "Redes" nos indicadores gerais refletem apenas os que tiveram venda no período.</div>'+
@@ -1414,11 +1389,9 @@ var TABS = [
   {id:'visao', label:'Visão Geral', build:buildVisaoGeral},
   {id:'marcas', label:'Ranking Marcas', build:buildRankingMarcas},
   {id:'pdv', label:'Ranking PDV', build:buildRankingPdv},
-  {id:'tri', label:'Trimestre (Jun-Ago)', build:buildTrimestreJunAgo},
   {id:'brick', label:'Decremento por Brick', build:buildBrick},
   {id:'outras', label:'Outras Dimensões', build:buildOutras},
   {id:'ytd', label:'YTD (Jan-Ago)', build:buildYTD},
-  {id:'trimestre', label:'Trimestre (Abr-Jun)', build:buildTrimestre},
   {id:'estrategia', label:'Análise Estratégica', build:buildEstrategia},
   {id:'metodologia', label:'Metodologia', build:buildMetodologia},
 ];
