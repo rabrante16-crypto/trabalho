@@ -624,21 +624,38 @@ function nestedSetorPdvRenderer(finalOpts){
     var countNote = setorRows.length+' setor(es) compõem este total (clique num setor para ver os PDVs; clique num cabeçalho para ordenar):';
     var html = '<div style="font-size:11.5px;color:var(--text-secondary);margin-bottom:4px">'+countNote+'</div>'+
       '<div class="tbl-wrap"><table class="dtable mini"><thead><tr>'+
-      miniTh('Setor','setor',tableId,sortInfo)+miniTh(DATA.file_info.periodo_anterior+' Unid','unid_jun25',tableId,sortInfo)+
-      miniTh(DATA.file_info.periodo_atual+' Unid','unid_proj',tableId,sortInfo)+miniTh(DATA.file_info.periodo_atual+' R$','reais_proj',tableId,sortInfo)+
+      miniTh('Setor','setor',tableId,sortInfo)+
+      miniTh(DATA.file_info.periodo_anterior+' Unid','unid_jun25',tableId,sortInfo)+
+      miniTh(DATA.file_info.periodo_atual+' Unid ('+DATA.file_info.dias_coletados+'d)','unid_jun26',tableId,sortInfo)+
+      miniTh(DATA.file_info.periodo_atual+' Unid (Proj)','unid_proj',tableId,sortInfo)+
+      miniTh('Increm Unid','unid_increm',tableId,sortInfo)+
+      miniTh('Evol %','unid_evol',tableId,sortInfo)+
+      miniTh(DATA.file_info.periodo_anterior+' R$','reais_jun25',tableId,sortInfo)+
+      miniTh(DATA.file_info.periodo_atual+' R$ ('+DATA.file_info.dias_coletados+'d)','reais_jun26',tableId,sortInfo)+
+      miniTh(DATA.file_info.periodo_atual+' R$ (Proj)','reais_proj',tableId,sortInfo)+
       miniTh('Increm R$','reais_increm',tableId,sortInfo)+
+      miniTh('Repres %','repres',tableId,sortInfo)+
       '</tr></thead><tbody>';
     setorRows.forEach(function(s){
       var subRid = parentRid+'_setor_'+String(s.setor).replace(/[^a-z0-9]/gi,'');
       if(pdvFilter) expanded[subRid] = true;
       var isOpen = !!expanded[subRid];
+      var repres = (parentRow && parentRow.reais_proj) ? s.reais_proj/parentRow.reais_proj : null;
       html += '<tr>'+
         '<td style="text-align:left"><span class="expand-btn" data-rid="'+subRid+'">'+(isOpen?'▼':'▶')+'</span>'+esc(niceName(s.setor))+'</td>'+
-        '<td>'+fmtInt(s.unid_jun25)+'</td><td>'+fmtInt(s.unid_proj)+'</td><td>'+fmtBRL(s.reais_proj)+'</td>'+
+        '<td>'+fmtInt(s.unid_jun25)+'</td>'+
+        '<td>'+fmtInt(s.unid_jun26)+'</td>'+
+        '<td>'+fmtInt(s.unid_proj)+'</td>'+
+        '<td><span class="'+signClass(s.unid_increm)+'">'+fmtSignedInt(s.unid_increm)+'</span></td>'+
+        '<td>'+(s.unid_evol==null?'-':'<span class="'+signClass(s.unid_evol)+'">'+fmtPct(s.unid_evol)+'</span>')+'</td>'+
+        '<td>'+fmtBRL(s.reais_jun25)+'</td>'+
+        '<td>'+fmtBRL(s.reais_jun26)+'</td>'+
+        '<td>'+fmtBRL(s.reais_proj)+'</td>'+
         '<td><span class="'+signClass(s.reais_increm)+'">'+fmtSignedBRL(s.reais_increm)+'</span></td>'+
+        '<td>'+(repres==null?'-':fmtPct(repres))+'</td>'+
         '</tr>';
       if(isOpen){
-        html += '<tr><td colspan="5" style="background:var(--surface-2);padding:6px 6px 10px 24px">'+
+        html += '<tr><td colspan="11" style="background:var(--surface-2);padding:6px 6px 10px 24px">'+
           pdvMiniTable(s.pdvs, Object.assign({showSetor:false}, finalOpts), expanded, subRid+'_pdvTable') +
           '</td></tr>';
       }
