@@ -996,26 +996,85 @@ function buildRankingPdvTable(rows, opts){
 }
 
 // ================= build: Marcas em decremento por Brick =================
+// 2º nível do drill-down de Decremento por Brick: dentro de um Brick, mostra as Marcas
+// (ordenáveis, piores primeiro por padrão) que compõem aquele total; clicar numa marca
+// expande a lista de PDVs (3º nível, via pdvMiniTable) onde aquela marca está em queda/alta.
+function brickMarcaRenderer(marcaRows, parentRow, expanded, parentRid){
+  if(!marcaRows || !marcaRows.length){
+    return '<div style="padding:4px 0;color:var(--text-secondary);font-size:12px">Nenhuma marca com venda encontrada para este brick.</div>';
+  }
+  var tableId = parentRid+'_marcaTable';
+  var sortInfo = miniSortState(expanded, tableId, 'unid_increm', false);
+  var rows = miniSortedRows(marcaRows, sortInfo);
+  var countNote = rows.length+' marca(s) com venda neste brick (clique numa marca para ver os PDVs; clique num cabeçalho para ordenar):';
+  var html = '<div style="font-size:11.5px;color:var(--text-secondary);margin-bottom:4px">'+countNote+'</div>'+
+    '<div class="tbl-wrap"><table class="dtable mini"><thead><tr>'+
+    miniTh('Marca','keyB',tableId,sortInfo)+
+    miniTh(DATA.file_info.periodo_anterior+' Unid','unid_jun25',tableId,sortInfo)+
+    miniTh(DATA.file_info.periodo_atual+' Unid ('+DATA.file_info.dias_coletados+'d)','unid_jun26',tableId,sortInfo)+
+    miniTh(DATA.file_info.periodo_atual+' Unid (Proj)','unid_proj',tableId,sortInfo)+
+    miniTh('Increm Unid','unid_increm',tableId,sortInfo)+
+    miniTh('Evol % Unid','unid_evol',tableId,sortInfo)+
+    miniTh(DATA.file_info.periodo_anterior+' R$','reais_jun25',tableId,sortInfo)+
+    miniTh(DATA.file_info.periodo_atual+' R$ ('+DATA.file_info.dias_coletados+'d)','reais_jun26',tableId,sortInfo)+
+    miniTh(DATA.file_info.periodo_atual+' R$ (Proj)','reais_proj',tableId,sortInfo)+
+    miniTh('Increm R$','reais_increm',tableId,sortInfo)+
+    '</tr></thead><tbody>';
+  rows.forEach(function(m){
+    var subRid = parentRid+'_marca_'+String(m.keyB).replace(/[^a-z0-9]/gi,'');
+    var isOpen = !!expanded[subRid];
+    html += '<tr>'+
+      '<td style="text-align:left"><span class="expand-btn" data-rid="'+subRid+'">'+(isOpen?'▼':'▶')+'</span>'+esc(niceName(m.keyB))+'</td>'+
+      '<td>'+fmtInt(m.unid_jun25)+'</td>'+
+      '<td>'+fmtInt(m.unid_jun26)+'</td>'+
+      '<td>'+fmtInt(m.unid_proj)+'</td>'+
+      '<td><span class="'+signClass(m.unid_increm)+'">'+fmtSignedInt(m.unid_increm)+'</span></td>'+
+      '<td>'+(m.unid_evol==null?'-':'<span class="'+signClass(m.unid_evol)+'">'+fmtPct(m.unid_evol)+'</span>')+'</td>'+
+      '<td>'+fmtBRL(m.reais_jun25)+'</td>'+
+      '<td>'+fmtBRL(m.reais_jun26)+'</td>'+
+      '<td>'+fmtBRL(m.reais_proj)+'</td>'+
+      '<td><span class="'+signClass(m.reais_increm)+'">'+fmtSignedBRL(m.reais_increm)+'</span></td>'+
+      '</tr>';
+    if(isOpen){
+      html += '<tr><td colspan="10" style="background:var(--surface-2);padding:6px 6px 10px 24px">'+
+        pdvMiniTable(m.pdvs, {showBrick:false}, expanded, subRid+'_pdvTable') +
+        '</td></tr>';
+    }
+  });
+  html += '</tbody></table></div>';
+  return html;
+}
+
 function buildBrick(){
   var el = document.getElementById('panel-brick');
   var setorIdx = setorIdxOf(currentSetor);
+  var brickAgg = aggregateBy('Brick', setorIdx).filter(function(b){ return b.unid_jun25>=5; });
   var combos = aggregateBy2('Brick','Marca', setorIdx).filter(function(x){ return x.unid_jun25>=5; });
-  var decremento = combos.slice().sort(function(a,b){return a.unid_increm-b.unid_increm;}).slice(0,20);
-  var crescimento = combos.slice().sort(function(a,b){return b.unid_increm-a.unid_increm;}).slice(0,20);
-  decremento.concat(crescimento).forEach(function(row){
-    var brickIdx = DATA.dims.Brick.indexOf(row.keyA);
-    var marcaIdx = DATA.dims.Marca.indexOf(row.keyB);
-    row.pdvs = pdvBreakdown(function(r){ return r[COL.Brick]===brickIdx && r[COL.Marca]===marcaIdx; }, setorIdx);
+  var combosByBrick = {};
+  combos.forEach(function(c){
+    if(!combosByBrick[c.keyA]) combosByBrick[c.keyA] = [];
+    combosByBrick[c.keyA].push(c);
   });
 
-  el.innerHTML = '<div class="note"><b>Nota sobre esta aba:</b> '+esc(DATA.decremento_sheet_note)+' Os rankings abaixo foram <b>recalculados a partir dos dados linha a linha da planilha mensal (QUERY)</b> (combinações Brick × Marca com pelo menos 5 unidades em '+DATA.file_info.periodo_anterior+'), para entregar de fato a análise "marcas em decremento por brick" sugerida pelo nome da aba original.</div>'+
+  var decremento = brickAgg.slice().sort(function(a,b){return a.unid_increm-b.unid_increm;}).slice(0,20);
+  var crescimento = brickAgg.slice().sort(function(a,b){return b.unid_increm-a.unid_increm;}).slice(0,20);
+  decremento.concat(crescimento).forEach(function(row){
+    var brickIdx = DATA.dims.Brick.indexOf(row.key);
+    row.marcas = (combosByBrick[row.key]||[]).map(function(c){
+      var marcaIdx = DATA.dims.Marca.indexOf(c.keyB);
+      return Object.assign({}, c, {
+        pdvs: pdvBreakdown(function(r){ return r[COL.Brick]===brickIdx && r[COL.Marca]===marcaIdx; }, setorIdx)
+      });
+    });
+  });
+
+  el.innerHTML = '<div class="note"><b>Nota sobre esta aba:</b> '+esc(DATA.decremento_sheet_note)+' Os rankings abaixo foram <b>recalculados a partir dos dados linha a linha da planilha mensal (QUERY)</b> (bricks e combinações Brick × Marca com pelo menos 5 unidades em '+DATA.file_info.periodo_anterior+'), para entregar de fato a análise "marcas em decremento por brick" sugerida pelo nome da aba original.</div>'+
     '<div class="note"><b>Sobre a comparação:</b> '+DATA.file_info.periodo_atual+' na base é um mês <b>parcial</b> ('+DATA.file_info.dias_coletados+' dias). O incremento/evolução abaixo compara a <b>projeção do mês cheio</b> (parcial &times; '+DATA.file_info.dias_mes+'/'+DATA.file_info.dias_coletados+', mesma fórmula usada no restante do dashboard) contra '+DATA.file_info.periodo_anterior+' (mês cheio), para ser uma comparação justa.</div>'+
-    '<h2 class="h">Marcas em decremento / crescimento por Brick'+filterNote()+'</h2>'+
-    '<p class="desc">Combinações Brick + Marca com maior queda ou crescimento projetado de unidades entre '+DATA.file_info.periodo_anterior+' e a projeção de '+DATA.file_info.periodo_atual+'.</p>';
+    '<h2 class="h">Bricks em decremento / crescimento'+filterNote()+'</h2>'+
+    '<p class="desc">Bricks ordenados pela maior queda ou crescimento projetado de unidades entre '+DATA.file_info.periodo_anterior+' e a projeção de '+DATA.file_info.periodo_atual+'. Clique na seta para ver quais marcas estão em queda/alta naquele brick; clique numa marca para ver em quais PDVs (e redes) isso acontece.</p>';
 
   var cols = [
-      {key:'keyA', label:'Brick', fmt:function(v){return esc(niceName(v));}},
-      {key:'keyB', label:'Marca', fmt:function(v){return esc(niceName(v));}},
+      {key:'key', label:'Brick', fmt:function(v){return esc(niceName(v));}},
       {key:'unid_jun25', label:DATA.file_info.periodo_anterior+' Unid', fmt:fmtInt},
       {key:'unid_jun26', label:DATA.file_info.periodo_atual+' Unid ('+DATA.file_info.dias_coletados+'d)', fmt:fmtInt},
       {key:'unid_proj', label:DATA.file_info.periodo_atual+' Unid (Proj)', fmt:fmtInt},
@@ -1027,17 +1086,15 @@ function buildBrick(){
       {key:'reais_increm', label:'Increm R$', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtSignedBRL(v)+'</span>';}},
   ];
 
-  var pdvRenderer = function(kids, row, expanded, rid){ return pdvMiniTable(kids, {showBrick:false}, expanded, rid+'_pdvTable'); };
-
   var card = document.createElement('div'); card.className='card';
-  card.innerHTML = '<h2 class="h" style="margin-top:0">Top 20 combinações em maior decremento</h2><p class="desc">Clique na seta para ver quais PDVs desse brick venderam essa marca, e a qual rede pertencem.</p>';
-  var tbl = buildTable({ columns: cols, rows: decremento, childKey:'pdvs', childRenderer:pdvRenderer, searchable:true, defaultSortKey:'unid_increm', defaultSortDesc:false });
+  card.innerHTML = '<h2 class="h" style="margin-top:0">Top 20 bricks em maior decremento</h2><p class="desc">Clique na seta para ver as marcas em queda nesse brick, e em seguida os PDVs de cada marca.</p>';
+  var tbl = buildTable({ columns: cols, rows: decremento, childKey:'marcas', childRenderer:brickMarcaRenderer, searchable:true, defaultSortKey:'unid_increm', defaultSortDesc:false });
   card.appendChild(tbl);
   el.appendChild(card);
 
   var card2 = document.createElement('div'); card2.className='card';
-  card2.innerHTML = '<h2 class="h" style="margin-top:0">Top 20 combinações em maior crescimento</h2><p class="desc">Clique na seta para ver quais PDVs desse brick venderam essa marca, e a qual rede pertencem.</p>';
-  var tbl2 = buildTable({ columns: cols, rows: crescimento, childKey:'pdvs', childRenderer:pdvRenderer, searchable:true, defaultSortKey:'unid_increm' });
+  card2.innerHTML = '<h2 class="h" style="margin-top:0">Top 20 bricks em maior crescimento</h2><p class="desc">Clique na seta para ver as marcas em alta nesse brick, e em seguida os PDVs de cada marca.</p>';
+  var tbl2 = buildTable({ columns: cols, rows: crescimento, childKey:'marcas', childRenderer:brickMarcaRenderer, searchable:true, defaultSortKey:'unid_increm' });
   card2.appendChild(tbl2);
   el.appendChild(card2);
 }
