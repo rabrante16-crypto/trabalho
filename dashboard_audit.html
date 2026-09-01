@@ -1150,186 +1150,177 @@ var PRESCRICOES_BICERTO_BY_CRM = {};
   (PRESCRICOES_BICERTO_BY_CRM[p[PREB.CRM]] = PRESCRICOES_BICERTO_BY_CRM[p[PREB.CRM]] || []).push(p);
 });
 
-function bicertoMarcaMiniTable(rows, row, expanded, rid){
+// physicians (bicerto) matching an optional Marca filter, aggregated across their matching rows,
+// honoring the global Setor filter -- mirrors physiciansFiltered() from Maiores Prescritores.
+// Setor shown per physician: the single filtered Setor when one is active, otherwise every Setor
+// that covers them joined with " / " (a physician can be covered by more than one Setor here).
+function physiciansFilteredBicerto(setorFilterIdx, marcaSet){
+  var map = {};
+  DATA.bicerto.prescricoes.forEach(function(p){
+    if(marcaSet && !marcaSet.has(p[PREB.MARCA])) return;
+    if(setorFilterIdx!=null && p[PREB.SETOR]!==setorFilterIdx) return;
+    var crmIdx = p[PREB.CRM];
+    var e = map[crmIdx]; if(!e){ e={tt_ant:0,tt_atual:0,euf_ant:0,euf_atual:0,setores:new Set()}; map[crmIdx]=e; }
+    e.tt_ant+=p[PREB.TT_ANT]; e.tt_atual+=p[PREB.TT_ATUAL]; e.euf_ant+=p[PREB.EUF_ANT]; e.euf_atual+=p[PREB.EUF_ATUAL];
+    e.setores.add(p[PREB.SETOR]);
+  });
+  var out=[];
+  Object.keys(map).forEach(function(k){
+    var crmIdx=+k, e=map[k];
+    var phy = DATA.bicerto.physicians[crmIdx];
+    var agg = makeAgg(e.tt_ant, e.tt_atual, e.euf_ant, e.euf_atual);
+    agg.crmIdx = crmIdx;
+    agg.crm = DATA.bicerto.crm_list[crmIdx];
+    agg.medico = DATA.bicerto.crm_name[crmIdx];
+    agg.esp = DATA.bicerto.dims.ESP[phy[PHYB.ESP]];
+    agg.visitado = DATA.bicerto.dims.Visitado[phy[PHYB.VISITADO]];
+    agg.setor = Array.from(e.setores).map(function(s){return niceName(DATA.bicerto.dims.Setor[s]);}).join(' / ');
+    out.push(agg);
+  });
+  return out;
+}
+
+// marcas prescribed by one physician (bicerto), honoring the same active Setor filter as the
+// outer row so the mini-table sums back up to that row's totals -- mirrors productsOf().
+function marcasOfBicerto(crmIdx, setorFilterIdx){
+  var rows = PRESCRICOES_BICERTO_BY_CRM[crmIdx] || [];
+  var map = {};
+  rows.forEach(function(p){
+    if(setorFilterIdx!=null && p[PREB.SETOR]!==setorFilterIdx) return;
+    var marcaIdx = p[PREB.MARCA];
+    var e = map[marcaIdx]; if(!e){ e={tt_ant:0,tt_atual:0,euf_ant:0,euf_atual:0}; map[marcaIdx]=e; }
+    e.tt_ant+=p[PREB.TT_ANT]; e.tt_atual+=p[PREB.TT_ATUAL]; e.euf_ant+=p[PREB.EUF_ANT]; e.euf_atual+=p[PREB.EUF_ATUAL];
+  });
+  var out=[];
+  Object.keys(map).forEach(function(k){
+    var e = map[k];
+    var agg = makeAgg(e.tt_ant, e.tt_atual, e.euf_ant, e.euf_atual);
+    agg.marcaIdx = +k;
+    agg.marca = DATA.bicerto.dims.Marca[k];
+    out.push(agg);
+  });
+  return out.sort(function(a,b){return b.tt_atual-a.tt_atual;});
+}
+
+// mini-table for a physician's marcas (bicerto) -- mirrors productMiniTable() without the
+// Mercado column, since Mercado is constant (_BICERTO) in this base.
+function marcaMiniTableBicerto(rows, row, expanded, rid){
   if(!rows || !rows.length){
     return '<div style="padding:4px 0;color:var(--text-secondary);font-size:12px">Nenhuma marca encontrada para este recorte.</div>';
   }
-  var tableId = (rid||'bicertoMarca')+'_marcaTable';
+  var tableId = (rid||'bicMarca')+'_marcaTable';
   var sortInfo = miniSortState(expanded, tableId);
   rows = miniSortedRows(rows, sortInfo);
-  var html = '<div style="font-size:11.5px;color:var(--text-secondary);margin-bottom:4px">'+rows.length+' marca(s) neste setor (clique numa coluna para ordenar):</div>'+
+  var html = '<div style="font-size:11.5px;color:var(--text-secondary);margin-bottom:4px">'+rows.length+' marca(s) prescrita(s) por este médico (clique numa coluna para ordenar):</div>'+
     '<div class="tbl-wrap" style="max-height:340px;overflow-y:auto"><table class="dtable mini"><thead><tr>'+
-    miniTh('Marca','marca',tableId,sortInfo,true)+miniTh('TT Ant','tt_ant',tableId,sortInfo)+miniTh('TT Atual','tt_atual',tableId,sortInfo)+miniTh('Repres %','repres',tableId,sortInfo)+
-    miniTh('Increm','tt_incr',tableId,sortInfo)+miniTh('Evol Merc','tt_evol',tableId,sortInfo)+miniTh('EUF Ant','euf_ant',tableId,sortInfo)+miniTh('EUF Atual','euf_atual',tableId,sortInfo)+
-    miniTh('Increm EUF','euf_incr',tableId,sortInfo)+miniTh('Evol EUF','euf_evol',tableId,sortInfo)+
+    miniTh('Marca','marca',tableId,sortInfo,true)+
+    miniTh('TT Ant','tt_ant',tableId,sortInfo)+miniTh('TT Atual','tt_atual',tableId,sortInfo)+
+    miniTh('EUF Ant','euf_ant',tableId,sortInfo)+miniTh('EUF Atual','euf_atual',tableId,sortInfo)+miniTh('Increm Mercado','tt_incr',tableId,sortInfo)+
     '</tr></thead><tbody>';
   rows.forEach(function(p){
     html += '<tr>'+
       '<td style="text-align:left">'+escProduto(p.marca)+'</td>'+
-      '<td>'+fmtInt(p.tt_ant)+'</td><td>'+fmtInt(p.tt_atual)+'</td><td>'+fmtPct(p.repres)+'</td>'+
+      '<td>'+fmtInt(p.tt_ant)+'</td><td>'+fmtInt(p.tt_atual)+'</td><td>'+fmtInt(p.euf_ant)+'</td><td>'+fmtInt(p.euf_atual)+'</td>'+
       '<td><span class="'+signClass(p.tt_incr)+'">'+fmtSignedInt(p.tt_incr)+'</span></td>'+
-      '<td>'+(p.tt_evol==null?'-':'<span class="'+signClass(p.tt_evol)+'">'+fmtPct(p.tt_evol)+'</span>')+'</td>'+
-      '<td>'+fmtInt(p.euf_ant)+'</td><td>'+fmtInt(p.euf_atual)+'</td>'+
-      '<td><span class="'+signClass(p.euf_incr)+'">'+fmtSignedInt(p.euf_incr)+'</span></td>'+
-      '<td>'+(p.euf_evol==null?'-':'<span class="'+signClass(p.euf_evol)+'">'+fmtPct(p.euf_evol)+'</span>')+'</td>'+
       '</tr>';
   });
   html += '</tbody></table></div>';
   return html;
 }
 
-// aggregate DATA.bicerto.prescricoes into Setor -> Marca totals, honoring every slicer at once
-function auditBicertoCompute(setorIdx, espIdx, visitadoIdx, crmSet){
-  var bySetor = {};
-  var crmSeen = new Set();
-  DATA.bicerto.prescricoes.forEach(function(p){
-    var sIdx = p[PREB.SETOR], crmIdx = p[PREB.CRM];
-    var phy = DATA.bicerto.physicians[crmIdx];
-    if(setorIdx!=null && sIdx!==setorIdx) return;
-    if(espIdx!=null && phy[PHYB.ESP]!==espIdx) return;
-    if(visitadoIdx!=null && phy[PHYB.VISITADO]!==visitadoIdx) return;
-    if(crmSet && !crmSet.has(crmIdx)) return;
-    crmSeen.add(crmIdx);
-    var se = bySetor[sIdx]; if(!se){ se = {tt_ant:0,tt_atual:0,euf_ant:0,euf_atual:0,byMarca:{}}; bySetor[sIdx]=se; }
-    se.tt_ant += p[PREB.TT_ANT]; se.tt_atual += p[PREB.TT_ATUAL]; se.euf_ant += p[PREB.EUF_ANT]; se.euf_atual += p[PREB.EUF_ATUAL];
-    var marcaIdx = p[PREB.MARCA];
-    var me = se.byMarca[marcaIdx]; if(!me){ me = {tt_ant:0,tt_atual:0,euf_ant:0,euf_atual:0}; se.byMarca[marcaIdx]=me; }
-    me.tt_ant += p[PREB.TT_ANT]; me.tt_atual += p[PREB.TT_ATUAL]; me.euf_ant += p[PREB.EUF_ANT]; me.euf_atual += p[PREB.EUF_ATUAL];
-  });
-  return {bySetor:bySetor, nMedicos:crmSeen.size};
-}
-
 function buildAuditBicerto(){
   var el = document.getElementById('panel-bicerto');
-  var bicertoExpanded = {};
+  var setorIdx = setorIdxOfBicerto(currentSetor);
+
   el.innerHTML = '<h2 class="h">Audit Bicerto'+filterNote()+'</h2>'+
-    '<p class="desc">Auditoria do mercado <b>_BICERTO</b>, no mesmo layout da aba Audit Pré-Visita: visão por Setor com detalhamento por Marca. Filtre por Médico e/ou CRM para localizar imediatamente a informação de auditoria de um médico específico &mdash; os demais filtros (Especialidade, Mercado, Visitado) funcionam como slicers.</p>'+
+    '<p class="desc">Ranking de médicos por volume de prescrição no mercado <b>_BICERTO</b>, no mesmo layout da aba Maiores Prescritores. Busque por Marca para identificar os maiores prescritores de uma marca específica.</p>'+
     '<div class="searchbar" style="margin-bottom:14px">'+
-    '<label style="font-size:12.5px;color:var(--text-secondary)">Médico: <input type="search" id="bicertoMedico" placeholder="Buscar por nome..." style="min-width:210px"></label>'+
-    '<label style="font-size:12.5px;color:var(--text-secondary)">CRM: <input type="search" id="bicertoCrm" placeholder="Buscar por CRM..." style="min-width:120px"></label>'+
-    '<label style="font-size:12.5px;color:var(--text-secondary)">ESP: <select id="bicertoEsp"><option value="">Todas</option></select></label>'+
-    '<label style="font-size:12.5px;color:var(--text-secondary)">Mercado: <select id="bicertoMercado"><option value="">Todos</option></select></label>'+
-    '<label style="font-size:12.5px;color:var(--text-secondary)">Visitado: <select id="bicertoVisitado"><option value="">Todos</option></select></label>'+
+    '<label style="font-size:12.5px;color:var(--text-secondary)">Marca: <input type="search" id="bicertoMarcaSearch" placeholder="Buscar marca..." style="min-width:220px"></label>'+
     '</div>'+
     '<div id="bicertoBody"></div>';
 
-  var medicoInp = el.querySelector('#bicertoMedico');
-  var crmInp = el.querySelector('#bicertoCrm');
-  var espSel = el.querySelector('#bicertoEsp');
-  var mercadoSel = el.querySelector('#bicertoMercado');
-  var visitadoSel = el.querySelector('#bicertoVisitado');
-
-  DATA.bicerto.dims.ESP.slice().map(function(e,i){return {e:e,i:i};}).sort(function(a,b){return a.e.localeCompare(b.e);}).forEach(function(o){
-    var opt=document.createElement('option'); opt.value=o.i; opt.textContent=o.e; espSel.appendChild(opt);
-  });
-  (function(){ var opt=document.createElement('option'); opt.value=0; opt.textContent='BICERTO'; mercadoSel.appendChild(opt); })();
-  DATA.bicerto.dims.Visitado.forEach(function(c,i){
-    var opt=document.createElement('option'); opt.value=i; opt.textContent=c; visitadoSel.appendChild(opt);
-  });
+  var marcaInp = el.querySelector('#bicertoMarcaSearch');
 
   var debounceTimer = null;
   function scheduleRender(){ clearTimeout(debounceTimer); debounceTimer = setTimeout(render, 150); }
 
   function render(){
-    var setorIdx = setorIdxOfBicerto(currentSetor);
-    var espIdx = espSel.value===''?null:+espSel.value;
-    var visitadoIdx = visitadoSel.value===''?null:+visitadoSel.value;
-    // Mercado é constante (_BICERTO) nesta base; o seletor fica só por paridade de layout
-    // com a Audit Pré-Visita e nunca de fato restringe nada.
-    var medicoQuery = medicoInp.value.trim();
-    var crmQuery = crmInp.value.trim();
+    var marcaQuery = marcaInp.value.trim().toLowerCase();
 
-    var crmSet = null;
-    if(medicoQuery || crmQuery){
-      crmSet = new Set();
-      var mq = medicoQuery.toLowerCase(), cq = crmQuery.toLowerCase();
-      DATA.bicerto.crm_list.forEach(function(crm, i){
-        var nameMatch = !mq || (DATA.bicerto.crm_name[i]||'').toLowerCase().indexOf(mq)>-1;
-        var crmMatch = !cq || String(crm).toLowerCase().indexOf(cq)>-1;
-        if(nameMatch && crmMatch) crmSet.add(i);
-      });
+    var marcaSet = null;
+    if(marcaQuery){
+      marcaSet = new Set();
+      DATA.bicerto.dims.Marca.forEach(function(m,i){ if(m.toLowerCase().indexOf(marcaQuery)>-1) marcaSet.add(i); });
     }
 
     var body = el.querySelector('#bicertoBody');
     body.innerHTML = '';
 
-    if(crmSet && crmSet.size===0){
-      body.innerHTML = '<div class="note">Nenhum médico encontrado para a busca informada.</div>';
+    if(marcaSet && marcaSet.size===0){
+      body.innerHTML = '<div class="note">Nenhuma marca encontrada para a busca informada.</div>';
       return;
     }
 
-    var comp = auditBicertoCompute(setorIdx, espIdx, visitadoIdx, crmSet);
-    var bySetor = comp.bySetor;
-    var grandTotalTT = 0, grandTotalTTAnt = 0, grandTotalEUF = 0, grandTotalEUFAnt = 0;
-    Object.keys(bySetor).forEach(function(k){ grandTotalTT+=bySetor[k].tt_atual; grandTotalTTAnt+=bySetor[k].tt_ant; grandTotalEUF+=bySetor[k].euf_atual; grandTotalEUFAnt+=bySetor[k].euf_ant; });
+    var rows = physiciansFilteredBicerto(setorIdx, marcaSet);
 
-    var rows = Object.keys(bySetor).map(function(k){
-      var se = bySetor[k];
-      var agg = makeAgg(se.tt_ant, se.tt_atual, se.euf_ant, se.euf_atual);
-      agg.setor = DATA.bicerto.dims.Setor[k];
-      agg.repres = grandTotalTT ? se.tt_atual/grandTotalTT : 0;
-      agg.marcas = Object.keys(se.byMarca).map(function(mk){
-        var me = se.byMarca[mk];
-        var magg = makeAgg(me.tt_ant, me.tt_atual, me.euf_ant, me.euf_atual);
-        magg.marca = DATA.bicerto.dims.Marca[mk];
-        magg.repres = se.tt_atual ? me.tt_atual/se.tt_atual : 0;
-        return magg;
-      }).sort(function(a,b){return b.tt_atual-a.tt_atual;});
-      return agg;
-    }).sort(function(a,b){return b.tt_atual-a.tt_atual;});
-
-    var kpiWrap = document.createElement('div'); kpiWrap.className='grid-kpi';
-    function tile(label,value){ var d=document.createElement('div'); d.className='tile'; d.innerHTML='<div class="label">'+label+'</div><div class="value">'+value+'</div>'; return d; }
-    kpiWrap.appendChild(tile('Médicos no recorte', fmtInt(comp.nMedicos)));
-    kpiWrap.appendChild(tile('Prescrições de mercado (atual)', fmtInt(grandTotalTT)));
-    kpiWrap.appendChild(tile('Prescrições EUF (atual)', fmtInt(grandTotalEUF)));
-    body.appendChild(kpiWrap);
-
-    if(crmSet && crmSet.size>0 && crmSet.size<=5){
-      var note = document.createElement('div'); note.className='note'; note.style.marginTop='12px';
-      note.innerHTML = '<b>Médico(s) encontrado(s):</b> '+Array.from(crmSet).map(function(i){
-        var phy = DATA.bicerto.physicians[i];
-        var setoresDoMedico = (PRESCRICOES_BICERTO_BY_CRM[i]||[]).map(function(p){return p[PREB.SETOR];});
-        var setoresUniq = Array.from(new Set(setoresDoMedico)).map(function(s){return niceName(DATA.bicerto.dims.Setor[s]);});
-        return esc(DATA.bicerto.crm_name[i])+' &mdash; CRM '+esc(DATA.bicerto.crm_list[i])+' &mdash; '+esc(setoresUniq.join(' / '))+' / '+esc(DATA.bicerto.dims.ESP[phy[PHYB.ESP]]);
-      }).join('<br>');
+    if(marcaSet && marcaSet.size<=8){
+      var note = document.createElement('div'); note.className='note'; note.style.marginBottom='12px';
+      note.innerHTML = '<b>Marca(s):</b> '+Array.from(marcaSet).map(function(i){return escProduto(DATA.bicerto.dims.Marca[i]);}).join(', ');
       body.appendChild(note);
     }
 
-    var card = document.createElement('div'); card.className='card';
-    card.innerHTML = '<h2 class="h" style="margin-top:0">Auditoria por Setor e Marca</h2><p class="desc">Clique na seta para ver o detalhamento por marca dentro do setor.</p>';
-    var totalAnt = rows.reduce(function(s,r){return s+r.tt_ant;},0);
-    var totalEufAnt = rows.reduce(function(s,r){return s+r.euf_ant;},0);
-    card.appendChild(buildTable({
+    var kpiWrap = document.createElement('div'); kpiWrap.className='grid-kpi';
+    var ttSum=0, eufSum=0; rows.forEach(function(r){ttSum+=r.tt_atual; eufSum+=r.euf_atual;});
+    function tile(label,value){ var d=document.createElement('div'); d.className='tile'; d.innerHTML='<div class="label">'+label+'</div><div class="value">'+value+'</div>'; return d; }
+    kpiWrap.appendChild(tile('Médicos no recorte', fmtInt(rows.length)));
+    kpiWrap.appendChild(tile('Prescrições de mercado (atual)', fmtInt(ttSum)));
+    kpiWrap.appendChild(tile('Prescrições EUF (atual)', fmtInt(eufSum)));
+    body.appendChild(kpiWrap);
+
+    var hasMarcaFilter = !!marcaSet;
+    var drillDesc = hasMarcaFilter
+      ? 'Clique na seta para ver, para este médico, apenas a(s) marca(s) buscada(s) acima.'
+      : 'Clique na seta para ver todas as marcas que o médico prescreve.';
+    var card2 = document.createElement('div'); card2.className='card';
+    card2.innerHTML = '<h2 class="h" style="margin-top:0">Todos os médicos do recorte</h2><p class="desc">'+drillDesc+' Busque por nome.</p>';
+    var rowsWithChildren = rows.map(function(r){
+      var marcas = marcasOfBicerto(r.crmIdx, setorIdx);
+      if(marcaSet) marcas = marcas.filter(function(m){ return marcaSet.has(m.marcaIdx); });
+      return Object.assign({}, r, {marcas: marcas});
+    });
+    card2.appendChild(buildTable({
       columns:[
-        {key:'setor', label:'Setor', fmt:function(v){return esc(niceName(v));}},
+        {key:'medico', label:'Médico', fmt:function(v){return esc(v);}},
+        {key:'esp', label:'Especialidade', fmt:function(v){return esc(v);}},
+        {key:'setor', label:'Setor', fmt:function(v){return esc(v);}},
+        {key:'visitado', label:'Visitado', fmt:function(v){return esc(v);}},
         {key:'tt_ant', label:'TT Ant', fmt:fmtInt},
         {key:'tt_atual', label:'TT Atual', fmt:fmtInt},
-        {key:'repres', label:'Repres %', fmt:fmtPct},
-        {key:'tt_incr', label:'Increm', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtSignedInt(v)+'</span>';}},
-        {key:'tt_evol', label:'Evol Merc', fmt:function(v){return v==null?'-':'<span class="'+signClass(v)+'">'+fmtPct(v)+'</span>';}},
-        {key:'euf_ant', label:'EUF Ant', fmt:fmtInt},
         {key:'euf_atual', label:'EUF Atual', fmt:fmtInt},
         {key:'euf_incr', label:'Increm EUF', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtSignedInt(v)+'</span>';}},
-        {key:'euf_evol', label:'Evol EUF', fmt:function(v){return v==null?'-':'<span class="'+signClass(v)+'">'+fmtPct(v)+'</span>';}},
       ],
-      rows: rows, childKey:'marcas', childRenderer: bicertoMarcaMiniTable,
-      defaultSortKey:'tt_atual', expandedState: bicertoExpanded,
-      totalRow: rows.length ? {
-        setor:'Total Geral', tt_ant: totalAnt, tt_atual: grandTotalTT, repres: 1,
-        tt_incr: grandTotalTT-totalAnt, tt_evol: totalAnt ? (grandTotalTT-totalAnt)/totalAnt : null,
-        euf_ant: totalEufAnt, euf_atual: grandTotalEUF,
-        euf_incr: grandTotalEUF-totalEufAnt, euf_evol: totalEufAnt ? (grandTotalEUF-totalEufAnt)/totalEufAnt : null,
-      } : null
+      rows: rowsWithChildren, childKey:'marcas', childRenderer: marcaMiniTableBicerto,
+      searchable:true, cap:500, defaultSortKey:'tt_atual'
     }));
-    body.appendChild(card);
+    body.appendChild(card2);
+
+    var row2 = document.createElement('div'); row2.className='row2';
+    var card = document.createElement('div'); card.className='card';
+    card.innerHTML = '<h2 class="h" style="margin-top:0">Top 12 prescritores por Mercado</h2><p class="desc">Ranqueado por prescrições de mercado (TT) atuais.</p>';
+    var topMercado = rows.slice().sort(function(a,b){return b.tt_atual-a.tt_atual;}).slice(0,12).map(function(r){return {label:r.medico, value:r.tt_atual};});
+    card.appendChild(topBar(topMercado, {formatter:fmtInt, color:'var(--s1)', labelW:200}));
+    row2.appendChild(card);
+
+    var card3 = document.createElement('div'); card3.className='card';
+    card3.innerHTML = '<h2 class="h" style="margin-top:0">Top 12 prescritores por Marca</h2><p class="desc">Ranqueado por prescrições EUF (marca Eurofarma) atuais.</p>';
+    var topProduto = rows.slice().sort(function(a,b){return b.euf_atual-a.euf_atual;}).slice(0,12).map(function(r){return {label:r.medico, value:r.euf_atual};});
+    card3.appendChild(topBar(topProduto, {formatter:fmtInt, color:'var(--s3)', labelW:200}));
+    row2.appendChild(card3);
+
+    body.appendChild(row2);
   }
 
-  medicoInp.addEventListener('input', scheduleRender);
-  crmInp.addEventListener('input', scheduleRender);
-  espSel.addEventListener('change', render);
-  mercadoSel.addEventListener('change', render);
-  visitadoSel.addEventListener('change', render);
+  marcaInp.addEventListener('input', scheduleRender);
   render();
 }
 
