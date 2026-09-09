@@ -892,19 +892,7 @@ function buildRankingPdv(){
   var tipoPdvIdx = (currentTipoPdv==='Todos') ? null : tipoPdvOptions.indexOf(currentTipoPdv);
   if(tipoPdvIdx===-1){ currentTipoPdv='Todos'; tipoPdvIdx=null; }
   el.innerHTML = '<h2 class="h">Ranking de Redes / PDVs (Bandeiras)'+filterNote()+'</h2>'+
-    '<p class="desc">Redes de farmácia ordenadas por faturamento projetado de '+DATA.file_info.periodo_atual+' (mês cheio, a partir do parcial de '+DATA.file_info.dias_coletados+' dias). Recalculado diretamente da planilha mensal (QUERY), linha a linha.</p>'+
-    '<div class="controls" style="margin-bottom:14px"><label style="font-size:12.5px;color:var(--text-secondary)">Tipo de PDV: <select id="tipoPdvFilterPdv"></select></label></div>';
-
-  var tipoPdvSel = el.querySelector('#tipoPdvFilterPdv');
-  var optTodos = document.createElement('option'); optTodos.value='Todos'; optTodos.textContent='Todos os tipos'; tipoPdvSel.appendChild(optTodos);
-  tipoPdvOptions.forEach(function(t){
-    var o = document.createElement('option'); o.value=t; o.textContent=t; tipoPdvSel.appendChild(o);
-  });
-  tipoPdvSel.value = currentTipoPdv;
-  tipoPdvSel.addEventListener('change', function(){
-    currentTipoPdv = tipoPdvSel.value;
-    buildRankingPdv();
-  });
+    '<p class="desc">Redes de farmácia ordenadas por faturamento projetado de '+DATA.file_info.periodo_atual+' (mês cheio, a partir do parcial de '+DATA.file_info.dias_coletados+' dias). Recalculado diretamente da planilha mensal (QUERY), linha a linha.</p>';
 
   var rows, totalRow;
   if(setorIdx==null && tipoPdvIdx==null){
@@ -937,16 +925,14 @@ function buildRankingPdv(){
     row.pdvs = pdvBreakdown(function(r){ return r[COL.Bandeira]===bandeiraIdx; }, setorIdx, tipoPdvIdx);
   });
 
-  var card = document.createElement('div'); card.className='card';
-  card.innerHTML = '<h2 class="h" style="margin-top:0">Top 12 redes por faturamento projetado ('+DATA.file_info.periodo_atual+')</h2>';
-  var top = rows.slice().sort(function(a,b){return (b.reais_proj||0)-(a.reais_proj||0);}).slice(0,12)
-    .map(function(m){return {label:m.bandeira, value:m.reais_proj||0};});
-  card.appendChild(topBar(top, {formatter:fmtBRL, color:'var(--s3)'}));
-  el.appendChild(card);
-
   var card2 = document.createElement('div'); card2.className='card';
-  card2.innerHTML = '<h2 class="h" style="margin-top:0">Todas as redes</h2><p class="desc">Clique na seta para ver o consolidado por Setor; clique num Setor para ver os PDVs (lojas) daquela rede naquele setor, com Endereço e Marcas vendidas. Use a busca por PDV / CNPJ para localizar uma loja específica &mdash; a maioria dos códigos de PDV traz o CNPJ como sufixo de 14 dígitos. A coluna <b>'+esc(DATA.file_info.periodo_atual)+' R$ (Proj)</b> está destacada pois é a base do ranqueamento desta aba.</p>';
-  card2.appendChild(buildRankingPdvTable(rows, { totalRow: totalRow }));
+  card2.innerHTML = '<h2 class="h" style="margin-top:0">Todas as redes</h2><p class="desc">Clique na seta para ver os PDVs (lojas) daquela rede, com Endereço e Marcas vendidas. Use a busca por PDV / CNPJ para localizar uma loja específica &mdash; a maioria dos códigos de PDV traz o CNPJ como sufixo de 14 dígitos. A coluna <b>'+esc(DATA.file_info.periodo_atual)+' R$ (Proj)</b> está destacada pois é a base do ranqueamento desta aba.</p>';
+  card2.appendChild(buildRankingPdvTable(rows, {
+    totalRow: totalRow,
+    tipoPdvOptions: tipoPdvOptions,
+    currentTipoPdv: currentTipoPdv,
+    onTipoPdvChange: function(v){ currentTipoPdv = v; buildRankingPdv(); }
+  }));
   el.appendChild(card2);
 }
 
@@ -976,7 +962,9 @@ function buildRankingPdvTable(rows, opts){
     {key:'reais_evol', label:'Evol % R$', fmt:function(v){return v==null?'-':'<span class="'+signClass(v)+'">'+fmtPct(v)+'</span>';}},
     {key:'repres', label:'Repres %', fmt:fmtPct},
   ];
-  var childRenderer = nestedSetorPdvRenderer({showBandeira:false, pdvFilterFn:function(){return pdvVal;}, showEndereco:true, showMarcas:true, emphasizeReaisProj:true});
+  function childRenderer(pdvRows, parentRow, expanded, parentRid){
+    return pdvMiniTable(pdvRows, {showBandeira:false, showSetor:false, showEndereco:true, showMarcas:true, emphasizeReaisProj:true, pdvFilterFn:function(){return pdvVal;}}, expanded, parentRid+'_pdvTable');
+  }
 
   function rowMatchesRede(row){
     if(!redeVal) return true;
@@ -1036,10 +1024,21 @@ function buildRankingPdvTable(rows, opts){
     html += '</tbody></table></div>';
 
     box.innerHTML = '<div class="searchbar" style="flex-wrap:wrap">'+
+      (opts.tipoPdvOptions ? '<label style="font-size:12.5px;color:var(--text-secondary)">Tipo de PDV: <select id="tipoPdvFilterPdv"></select></label>' : '')+
       '<input type="search" placeholder="Buscar rede..." id="redeSearch" value="'+esc(redeVal)+'" style="min-width:200px">'+
       '<input type="search" placeholder="Buscar PDV / CNPJ..." id="pdvCodeSearch" value="'+esc(pdvVal)+'" style="min-width:220px">'+
       '<span class="badge">'+visRows.length+' de '+rows.length+'</span>'+
       '</div>'+html;
+
+    if(opts.tipoPdvOptions){
+      var tipoSel = box.querySelector('#tipoPdvFilterPdv');
+      var optTodos = document.createElement('option'); optTodos.value='Todos'; optTodos.textContent='Todos os tipos'; tipoSel.appendChild(optTodos);
+      opts.tipoPdvOptions.forEach(function(t){
+        var o = document.createElement('option'); o.value=t; o.textContent=t; tipoSel.appendChild(o);
+      });
+      tipoSel.value = opts.currentTipoPdv;
+      tipoSel.addEventListener('change', function(){ opts.onTipoPdvChange(tipoSel.value); });
+    }
 
     var redeInp = box.querySelector('#redeSearch');
     var pdvInp = box.querySelector('#pdvCodeSearch');
