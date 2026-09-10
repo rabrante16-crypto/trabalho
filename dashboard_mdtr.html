@@ -907,7 +907,7 @@ function buildRankingPdv(){
   var totalRow = Object.assign({pdv:totalLabel}, aggregateTotal(setorIdx, tipoPdvIdx));
 
   var card2 = document.createElement('div'); card2.className='card';
-  card2.innerHTML = '<h2 class="h" style="margin-top:0">Todos os PDVs</h2><p class="desc">Ranking de PDVs (lojas) pelo faturamento projetado &mdash; um PDV por linha, com Endereço e Brick. Use a busca por Rede ou por PDV / CNPJ para localizar lojas específicas &mdash; a maioria dos códigos de PDV traz o CNPJ como sufixo de 14 dígitos. A coluna <b>'+esc(DATA.file_info.periodo_atual)+' R$ (Proj)</b> está destacada pois é a base do ranqueamento desta aba.</p>';
+  card2.innerHTML = '<h2 class="h" style="margin-top:0">Todos os PDVs</h2><p class="desc">Ranking de PDVs (lojas) pelo faturamento projetado &mdash; um PDV por linha. Clique na seta ao lado do PDV para ver o Endereço. Use a busca por Rede ou por PDV / CNPJ para localizar lojas específicas &mdash; a maioria dos códigos de PDV traz o CNPJ como sufixo de 14 dígitos. A coluna <b>'+esc(DATA.file_info.periodo_atual)+' R$ (Proj)</b> está destacada pois é a base do ranqueamento desta aba.</p>';
   card2.appendChild(buildRankingPdvTable(rows, {
     totalRow: totalRow,
     tipoPdvOptions: tipoPdvOptions,
@@ -926,10 +926,9 @@ function buildRankingPdvTable(rows, opts){
   var redeVal = '', pdvVal = '';
   var sortKey = 'reais_proj', sortDesc = true;
   var focusField = null; // 'rede' | 'pdv' | null -- which search box to refocus after the next render
+  var expanded = {};
   var columns = [
     {key:'pdv', label:'PDV', fmt:function(v){return esc(v);}},
-    {key:'endereco', label:'Endereço', fmt:function(v){return esc(v||'-');}},
-    {key:'brick', label:'Brick', fmt:function(v){return v==null?'-':esc(niceName(v));}},
     {key:'unid_jun25', label:DATA.file_info.periodo_anterior+' Unid', fmt:fmtInt},
     {key:'unid_jun26', label:DATA.file_info.periodo_atual+' Unid ('+DATA.file_info.dias_coletados+'d)', fmt:fmtInt},
     {key:'unid_proj', label:DATA.file_info.periodo_atual+' Unid (Proj)', fmt:fmtInt},
@@ -968,14 +967,25 @@ function buildRankingPdvTable(rows, opts){
       html += '<th data-k="'+c.key+'" class="'+thCls+'">'+esc(c.label)+(sortKey===c.key?(sortDesc?' ▼':' ▲'):'')+'</th>';
     });
     html += '</tr></thead><tbody>';
-    visRows.forEach(function(row){
+    visRows.forEach(function(row, idx){
+      var hasAddr = !!row.endereco;
+      var rid = 'pdv'+idx+'_'+String(row.pdv||'').replace(/[^a-z0-9]/gi,'');
+      var isOpen = !!expanded[rid];
       html += '<tr>';
       columns.forEach(function(c){
         var v = row[c.key];
         var content = c.fmt ? c.fmt(v,row) : esc(v);
+        if(c.key==='pdv'){
+          content = hasAddr
+            ? '<span class="expand-btn" data-rid="'+rid+'">'+(isOpen?'▼':'▶')+'</span>'+content
+            : '<span style="display:inline-block;width:18px"></span>'+content;
+        }
         html += '<td'+(c.key==='reais_proj'?' class="rank-basis"':'')+'>'+content+'</td>';
       });
       html += '</tr>';
+      if(hasAddr && isOpen){
+        html += '<tr class="child-detail"><td colspan="'+columns.length+'">Endereço: '+esc(row.endereco)+'</td></tr>';
+      }
     });
     if(opts.totalRow){
       html += '<tr class="total">';
@@ -1015,6 +1025,14 @@ function buildRankingPdvTable(rows, opts){
       th.addEventListener('click', function(){
         var k = th.getAttribute('data-k');
         if(sortKey===k) sortDesc=!sortDesc; else { sortKey=k; sortDesc=true; }
+        render();
+      });
+    });
+    box.querySelectorAll('.expand-btn').forEach(function(btn){
+      btn.addEventListener('click', function(e){
+        e.stopPropagation();
+        var rid = btn.getAttribute('data-rid');
+        expanded[rid] = !expanded[rid];
         render();
       });
     });
