@@ -556,6 +556,27 @@ function aggregateBy2(dimA, dimB, setorFilterIdx){
   return out;
 }
 
+// Quebra por Setor de uma única Marca (usado no drill-down "Marcas prioritárias" da Análise
+// Estratégica, para mostrar quais setores estão puxando o faturamento daquela marca para baixo).
+function setorBreakdownForMarca(marcaIdx, setorFilterIdx){
+  var map = {};
+  DATA.rows.forEach(function(row){
+    if(setorFilterIdx!=null && row[COL.Setor]!==setorFilterIdx) return;
+    if(row[COL.Marca]!==marcaIdx) return;
+    var k = row[COL.Setor];
+    var e = map[k]; if(!e){ e=[0,0,0,0]; map[k]=e; }
+    e[0]+=row[COL_U25]; e[1]+=row[COL_U26]; e[2]+=row[COL_R25]; e[3]+=row[COL_R26];
+  });
+  var out=[];
+  Object.keys(map).forEach(function(k){
+    var v = map[k];
+    var agg = makeAgg(v[0],v[1],v[2],v[3]);
+    agg.setor = DATA.dims.Setor[k];
+    out.push(agg);
+  });
+  return out;
+}
+
 function distinctCount(dimName, setorFilterIdx){
   var col = COL[dimName];
   var seen = {}; var n=0;
@@ -1076,6 +1097,37 @@ function buildRankingPdvTable(rows, opts){
   return box;
 }
 
+// Drill-down de "Marcas prioritárias" (Análise Estratégica): para uma marca com evolução de
+// faturamento negativa, mostra quais setores estão puxando essa queda e em quantos reais.
+function marcaSetorImpactRenderer(setorRows, parentRow, expanded, parentRid){
+  if(!setorRows || !setorRows.length){
+    return '<div style="padding:4px 0;color:var(--text-secondary);font-size:12px">Nenhum setor com impacto negativo identificado para esta marca.</div>';
+  }
+  var tableId = parentRid+'_setorImpact';
+  var sortInfo = miniSortState(expanded, tableId, 'reais_increm', false);
+  var rows = miniSortedRows(setorRows, sortInfo);
+  var countNote = rows.length+' setor(es) contribuindo para a queda de faturamento desta marca (clique num cabeçalho para ordenar):';
+  var html = '<div style="font-size:11.5px;color:var(--text-secondary);margin-bottom:4px">'+countNote+'</div>'+
+    '<div class="tbl-wrap"><table class="dtable mini"><thead><tr>'+
+    miniTh('Setor','setor',tableId,sortInfo)+
+    miniTh(DATA.file_info.periodo_anterior+' R$','reais_jun25',tableId,sortInfo)+
+    miniReaisAtualTh(tableId,sortInfo,false)+
+    miniTh('Increm R$','reais_increm',tableId,sortInfo)+
+    miniTh('Evol % R$','reais_evol',tableId,sortInfo)+
+    '</tr></thead><tbody>';
+  rows.forEach(function(s){
+    html += '<tr>'+
+      '<td style="text-align:left">'+esc(niceName(s.setor))+'</td>'+
+      '<td>'+fmtBRL(s.reais_jun25)+'</td>'+
+      miniReaisAtualTd(s, false)+
+      '<td><span class="'+signClass(s.reais_increm)+'">'+fmtSignedBRL(s.reais_increm)+'</span></td>'+
+      '<td>'+(s.reais_evol==null?'-':'<span class="'+signClass(s.reais_evol)+'">'+fmtPct(s.reais_evol)+'</span>')+'</td>'+
+      '</tr>';
+  });
+  html += '</tbody></table></div>';
+  return html;
+}
+
 // ================= build: Marcas em decremento por Brick =================
 // 2º nível do drill-down de Decremento por Brick: dentro de um Brick, mostra as Marcas
 // (ordenáveis, piores primeiro por padrão) que compõem aquele total; clicar numa marca
@@ -1475,7 +1527,7 @@ function buildEstrategia(){
 
   var row2 = document.createElement('div'); row2.className='row2';
   var cardMarcaP = document.createElement('div'); cardMarcaP.className='card';
-  cardMarcaP.innerHTML = '<h2 class="h" style="margin-top:0">Marcas prioritárias</h2><p class="desc">Maior risco de faturamento (marcas com pelo menos 10 unidades em '+DATA.file_info.periodo_anterior+').</p>';
+  cardMarcaP.innerHTML = '<h2 class="h" style="margin-top:0">Marcas prioritárias</h2><p class="desc">Maior risco de faturamento (marcas com pelo menos 10 unidades em '+DATA.file_info.periodo_anterior+'). Marcas com queda de faturamento têm seta para expandir e ver quais setores estão puxando essa queda, e em quantos reais.</p>';
   var tblMarcaP = buildTable({
     columns:[
       {key:'key', label:'Marca', fmt:function(v){return esc(niceName(v));}},
@@ -1483,8 +1535,15 @@ function buildEstrategia(){
       {key:'reais_increm', label:'Increm R$', fmt:function(v){return '<span class="'+signClass(v)+'">'+fmtSignedBRL(v)+'</span>';}},
       {key:'acao', label:'Ação sugerida', fmt:function(v){return '<span style="white-space:normal;display:block;max-width:260px;text-align:left">'+esc(v)+'</span>';}},
     ],
-    rows: marcasPrioritarias.map(function(m){ return Object.assign({}, m, {acao: actionForMarca(m.unid_evol, m.reais_jun25 ? m.reais_proj/tot.reais_proj : null)}); }),
-    defaultSortKey:'reais_increm', defaultSortDesc:false
+    rows: marcasPrioritarias.map(function(m){
+      var marcaIdx = DATA.dims.Marca.indexOf(m.key);
+      var setoresImpacto = m.reais_increm<0
+        ? setorBreakdownForMarca(marcaIdx, setorIdx).filter(function(s){return s.reais_increm<0;}).sort(function(a,b){return a.reais_increm-b.reais_increm;})
+        : [];
+      return Object.assign({}, m, {acao: actionForMarca(m.unid_evol, m.reais_jun25 ? m.reais_proj/tot.reais_proj : null), setoresImpacto: setoresImpacto});
+    }),
+    defaultSortKey:'reais_increm', defaultSortDesc:false,
+    childKey:'setoresImpacto', childRenderer: marcaSetorImpactRenderer
   });
   cardMarcaP.appendChild(tblMarcaP);
   row2.appendChild(cardMarcaP);
