@@ -618,11 +618,34 @@ function pdvBreakdown(filterFn, setorFilterIdx, tipoPdvFilterIdx){
     var e = map[k];
     var agg = makeAgg(e.u25,e.u26,e.r25,e.r26);
     agg.pdv = DATA.dims.PDV[k];
+    agg.pdvIdx = Number(k);
     agg.brick = DATA.dims.Brick[e.brickIdx];
     agg.bandeira = DATA.dims.Bandeira[e.bandeiraIdx];
     agg.setor = DATA.dims.Setor[e.setorIdx];
     agg.endereco = (DATA.pdv_endereco && DATA.pdv_endereco[k]) || null;
     agg.marcas = Array.from(e.marcaIdxSet).map(function(mi){ return DATA.dims.Marca[mi]; }).sort().join(', ');
+    out.push(agg);
+  });
+  return out.sort(function(a,b){return b.reais_proj-a.reais_proj;});
+}
+
+// Quebra por Marca de um único PDV (drill-down "Todos os PDVs" do Ranking PDV, para medir a
+// venda de cada marca naquele PDV).
+function marcaBreakdownForPdv(pdvIdx, setorFilterIdx, tipoPdvFilterIdx){
+  var map = {};
+  DATA.rows.forEach(function(row){
+    if(setorFilterIdx!=null && row[COL.Setor]!==setorFilterIdx) return;
+    if(tipoPdvFilterIdx!=null && row[COL['Tipo PDV']]!==tipoPdvFilterIdx) return;
+    if(row[COL.PDV]!==pdvIdx) return;
+    var k = row[COL.Marca];
+    var e = map[k]; if(!e){ e=[0,0,0,0]; map[k]=e; }
+    e[0]+=row[COL_U25]; e[1]+=row[COL_U26]; e[2]+=row[COL_R25]; e[3]+=row[COL_R26];
+  });
+  var out=[];
+  Object.keys(map).forEach(function(k){
+    var v = map[k];
+    var agg = makeAgg(v[0],v[1],v[2],v[3]);
+    agg.marca = DATA.dims.Marca[k];
     out.push(agg);
   });
   return out.sort(function(a,b){return b.reais_proj-a.reais_proj;});
@@ -962,12 +985,14 @@ function buildRankingPdv(){
   var totalRow = Object.assign({pdv:totalLabel}, aggregateTotal(setorIdx, tipoPdvIdx));
 
   var card2 = document.createElement('div'); card2.className='card';
-  card2.innerHTML = '<h2 class="h" style="margin-top:0">Todos os PDVs</h2><p class="desc">Ranking de PDVs (lojas) pelo faturamento'+(IS_CLOSED?'':' projetado')+' &mdash; um PDV por linha. Clique na seta ao lado do PDV para ver as Marcas vendidas naquele PDV. Use a busca por Rede ou por PDV / CNPJ para localizar lojas específicas &mdash; a maioria dos códigos de PDV traz o CNPJ como sufixo de 14 dígitos. A coluna <b>'+esc(DATA.file_info.periodo_atual)+' R$'+(IS_CLOSED?'':' (Proj)')+'</b> está destacada pois é a base do ranqueamento desta aba.</p>';
+  card2.innerHTML = '<h2 class="h" style="margin-top:0">Todos os PDVs</h2><p class="desc">Ranking de PDVs (lojas) pelo faturamento'+(IS_CLOSED?'':' projetado')+' &mdash; um PDV por linha. Clique na seta ao lado do PDV para ver a venda de cada Marca naquele PDV, linha a linha. Use a busca por Rede ou por PDV / CNPJ para localizar lojas específicas &mdash; a maioria dos códigos de PDV traz o CNPJ como sufixo de 14 dígitos. A coluna <b>'+esc(DATA.file_info.periodo_atual)+' R$'+(IS_CLOSED?'':' (Proj)')+'</b> está destacada pois é a base do ranqueamento desta aba.</p>';
   card2.appendChild(buildRankingPdvTable(rows, {
     totalRow: totalRow,
     tipoPdvOptions: tipoPdvOptions,
     currentTipoPdv: currentTipoPdv,
-    onTipoPdvChange: function(v){ currentTipoPdv = v; buildRankingPdv(); }
+    onTipoPdvChange: function(v){ currentTipoPdv = v; buildRankingPdv(); },
+    setorIdx: setorIdx,
+    tipoPdvIdx: tipoPdvIdx
   }));
   el.appendChild(card2);
 }
@@ -1040,7 +1065,9 @@ function buildRankingPdvTable(rows, opts){
       });
       html += '</tr>';
       if(hasMarcas && isOpen){
-        html += '<tr class="child-detail"><td colspan="'+columns.length+'">Marcas: '+esc(row.marcas)+'</td></tr>';
+        html += '<tr class="child-detail"><td colspan="'+columns.length+'">'+
+          pdvMarcaRenderer(marcaBreakdownForPdv(row.pdvIdx, opts.setorIdx, opts.tipoPdvIdx), row, expanded, rid) +
+          '</td></tr>';
       }
     });
     if(opts.totalRow){
@@ -1122,6 +1149,45 @@ function marcaSetorImpactRenderer(setorRows, parentRow, expanded, parentRid){
       miniReaisAtualTd(s, false)+
       '<td><span class="'+signClass(s.reais_increm)+'">'+fmtSignedBRL(s.reais_increm)+'</span></td>'+
       '<td>'+(s.reais_evol==null?'-':'<span class="'+signClass(s.reais_evol)+'">'+fmtPct(s.reais_evol)+'</span>')+'</td>'+
+      '</tr>';
+  });
+  html += '</tbody></table></div>';
+  return html;
+}
+
+// Drill-down "Todos os PDVs" (Ranking PDV): dentro de um PDV, mostra a venda de cada Marca
+// naquele PDV, linha a linha, para medir o mix de produtos por loja.
+function pdvMarcaRenderer(marcaRows, parentRow, expanded, parentRid){
+  if(!marcaRows || !marcaRows.length){
+    return '<div style="padding:4px 0;color:var(--text-secondary);font-size:12px">Nenhuma marca com venda encontrada para este PDV.</div>';
+  }
+  var tableId = parentRid+'_marcaTable';
+  var sortInfo = miniSortState(expanded, tableId, 'reais_proj', true);
+  var rows = miniSortedRows(marcaRows, sortInfo);
+  var countNote = rows.length+' marca(s) vendidas neste PDV (clique num cabeçalho para ordenar):';
+  var html = '<div style="font-size:11.5px;color:var(--text-secondary);margin-bottom:4px">'+countNote+'</div>'+
+    '<div class="tbl-wrap"><table class="dtable mini"><thead><tr>'+
+    miniTh('Marca','marca',tableId,sortInfo)+
+    miniTh(DATA.file_info.periodo_anterior+' Unid','unid_jun25',tableId,sortInfo)+
+    miniUnidAtualTh(tableId,sortInfo)+
+    miniTh('Increm Unid','unid_increm',tableId,sortInfo)+
+    miniTh('Evol % Unid','unid_evol',tableId,sortInfo)+
+    miniTh(DATA.file_info.periodo_anterior+' R$','reais_jun25',tableId,sortInfo)+
+    miniReaisAtualTh(tableId,sortInfo,true)+
+    miniTh('Increm R$','reais_increm',tableId,sortInfo)+
+    miniTh('Evol % R$','reais_evol',tableId,sortInfo)+
+    '</tr></thead><tbody>';
+  rows.forEach(function(m){
+    html += '<tr>'+
+      '<td style="text-align:left">'+esc(m.marca)+'</td>'+
+      '<td>'+fmtInt(m.unid_jun25)+'</td>'+
+      miniUnidAtualTd(m)+
+      '<td><span class="'+signClass(m.unid_increm)+'">'+fmtSignedInt(m.unid_increm)+'</span></td>'+
+      '<td>'+(m.unid_evol==null?'-':'<span class="'+signClass(m.unid_evol)+'">'+fmtPct(m.unid_evol)+'</span>')+'</td>'+
+      '<td>'+fmtBRL(m.reais_jun25)+'</td>'+
+      miniReaisAtualTd(m, true)+
+      '<td><span class="'+signClass(m.reais_increm)+'">'+fmtSignedBRL(m.reais_increm)+'</span></td>'+
+      '<td>'+(m.reais_evol==null?'-':'<span class="'+signClass(m.reais_evol)+'">'+fmtPct(m.reais_evol)+'</span>')+'</td>'+
       '</tr>';
   });
   html += '</tbody></table></div>';
