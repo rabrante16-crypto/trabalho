@@ -311,7 +311,23 @@ function buildTable(opts){
   var sortKey = opts.defaultSortKey || null;
   var sortDesc = opts.defaultSortDesc!==false;
   var expanded = {};
-  var searchFocusPending = false;
+
+  // O input de busca fica num container PRÓPRIO, montado uma única vez e nunca recriado --
+  // só o container da tabela é substituído a cada render(). Recriar o <input> a cada tecla
+  // (via box.innerHTML) fazia o teclado numérico/de texto do iOS "piscar" de volta para letras
+  // a cada toque, porque o elemento focado deixava de existir e um novo tomava o lugar dele.
+  var searchBarEl = null, badgeEl = null, inp = null;
+  if(opts.searchable){
+    searchBarEl = document.createElement('div');
+    searchBarEl.className = 'searchbar';
+    searchBarEl.innerHTML = '<input type="search" placeholder="Buscar..." id="'+opts._id+'_search" style="min-width:220px"><span class="badge"></span>';
+    box.appendChild(searchBarEl);
+    inp = searchBarEl.querySelector('input');
+    badgeEl = searchBarEl.querySelector('.badge');
+    inp.addEventListener('input', function(){ searchVal = inp.value; render(); });
+  }
+  var tableEl = document.createElement('div');
+  box.appendChild(tableEl);
 
   function matches(row){
     if(!searchVal) return true;
@@ -366,21 +382,17 @@ function buildTable(opts){
       html += '</tr>';
     }
     html += '</tbody></table></div>';
-    box.innerHTML = (opts.searchable ? '<div class="searchbar"><input type="search" placeholder="Buscar..." id="'+opts._id+'_search" value="'+esc(searchVal)+'" style="min-width:220px"><span class="badge">'+visRows.length+' de '+rows.length+'</span></div>' : '') + html;
+    tableEl.innerHTML = html;
+    if(opts.searchable) badgeEl.textContent = visRows.length+' de '+rows.length;
 
-    if(opts.searchable){
-      var inp = box.querySelector('#'+opts._id+'_search');
-      if(searchFocusPending){ inp.focus(); inp.setSelectionRange(inp.value.length,inp.value.length); }
-      inp.addEventListener('input', function(){ searchVal = inp.value; searchFocusPending = true; render(); });
-    }
-    box.querySelectorAll('th[data-k]').forEach(function(th){
+    tableEl.querySelectorAll('th[data-k]').forEach(function(th){
       th.addEventListener('click', function(){
         var k = th.getAttribute('data-k');
         if(sortKey===k) sortDesc = !sortDesc; else { sortKey=k; sortDesc=true; }
         render();
       });
     });
-    box.querySelectorAll('.expand-btn').forEach(function(btn){
+    tableEl.querySelectorAll('.expand-btn').forEach(function(btn){
       btn.addEventListener('click', function(e){
         e.stopPropagation();
         var rid = btn.getAttribute('data-rid');
@@ -390,7 +402,7 @@ function buildTable(opts){
     });
     // sortable headers inside drill-down / nested mini-tables (childRenderer output);
     // stored in the same `expanded` bag under a "sort:" prefix so it survives re-renders.
-    box.querySelectorAll('th[data-sk]').forEach(function(th){
+    tableEl.querySelectorAll('th[data-sk]').forEach(function(th){
       th.addEventListener('click', function(e){
         e.stopPropagation();
         var tid = th.getAttribute('data-st'), k = th.getAttribute('data-sk');
@@ -1005,7 +1017,6 @@ function buildRankingPdvTable(rows, opts){
   var box = document.createElement('div');
   var redeVal = '', pdvVal = '';
   var sortKey = 'reais_proj', sortDesc = true;
-  var focusField = null; // 'rede' | 'pdv' | null -- which search box to refocus after the next render
   var expanded = {};
   var columns = [
     {key:'pdv', label:'PDV', fmt:function(v){return esc(v);}},
@@ -1031,6 +1042,36 @@ function buildRankingPdvTable(rows, opts){
     if(!pdvVal) return true;
     return String(row.pdv||'').toLowerCase().indexOf(pdvVal.toLowerCase())>-1;
   }
+
+  // Barra de busca (select de Tipo de PDV + os dois campos de texto) e badge de contagem
+  // montados UMA VEZ e nunca recriados -- só a tabela abaixo é substituída a cada render().
+  // Recriar os <input> a cada tecla (via box.innerHTML) fazia o teclado do iOS/Chrome piscar
+  // de volta para letras a cada toque, porque o campo focado deixava de existir.
+  var searchBarEl = document.createElement('div');
+  searchBarEl.className = 'searchbar';
+  searchBarEl.style.flexWrap = 'wrap';
+  searchBarEl.innerHTML =
+    (opts.tipoPdvOptions ? '<label style="font-size:12.5px;color:var(--text-secondary)">Tipo de PDV: <select id="tipoPdvFilterPdv"></select></label>' : '')+
+    '<input type="search" placeholder="Buscar rede..." id="redeSearch" style="min-width:200px">'+
+    '<input type="search" placeholder="Buscar PDV / CNPJ..." id="pdvCodeSearch" style="min-width:220px">'+
+    '<span class="badge"></span>';
+  box.appendChild(searchBarEl);
+  var badgeEl = searchBarEl.querySelector('.badge');
+  var redeInp = searchBarEl.querySelector('#redeSearch');
+  var pdvInp = searchBarEl.querySelector('#pdvCodeSearch');
+  redeInp.addEventListener('input', function(){ redeVal = redeInp.value; render(); });
+  pdvInp.addEventListener('input', function(){ pdvVal = pdvInp.value; render(); });
+  if(opts.tipoPdvOptions){
+    var tipoSel = searchBarEl.querySelector('#tipoPdvFilterPdv');
+    var optTodos = document.createElement('option'); optTodos.value='Todos'; optTodos.textContent='Todos os tipos'; tipoSel.appendChild(optTodos);
+    opts.tipoPdvOptions.forEach(function(t){
+      var o = document.createElement('option'); o.value=t; o.textContent=t; tipoSel.appendChild(o);
+    });
+    tipoSel.value = opts.currentTipoPdv;
+    tipoSel.addEventListener('change', function(){ opts.onTipoPdvChange(tipoSel.value); });
+  }
+  var tableEl = document.createElement('div');
+  box.appendChild(tableEl);
 
   function render(){
     var sorted = rows.slice();
@@ -1080,38 +1121,17 @@ function buildRankingPdvTable(rows, opts){
     }
     html += '</tbody></table></div>';
 
-    box.innerHTML = '<div class="searchbar" style="flex-wrap:wrap">'+
-      (opts.tipoPdvOptions ? '<label style="font-size:12.5px;color:var(--text-secondary)">Tipo de PDV: <select id="tipoPdvFilterPdv"></select></label>' : '')+
-      '<input type="search" placeholder="Buscar rede..." id="redeSearch" value="'+esc(redeVal)+'" style="min-width:200px">'+
-      '<input type="search" placeholder="Buscar PDV / CNPJ..." id="pdvCodeSearch" value="'+esc(pdvVal)+'" style="min-width:220px">'+
-      '<span class="badge">'+visRows.length+' de '+rows.length+'</span>'+
-      '</div>'+html;
+    tableEl.innerHTML = html;
+    badgeEl.textContent = visRows.length+' de '+rows.length;
 
-    if(opts.tipoPdvOptions){
-      var tipoSel = box.querySelector('#tipoPdvFilterPdv');
-      var optTodos = document.createElement('option'); optTodos.value='Todos'; optTodos.textContent='Todos os tipos'; tipoSel.appendChild(optTodos);
-      opts.tipoPdvOptions.forEach(function(t){
-        var o = document.createElement('option'); o.value=t; o.textContent=t; tipoSel.appendChild(o);
-      });
-      tipoSel.value = opts.currentTipoPdv;
-      tipoSel.addEventListener('change', function(){ opts.onTipoPdvChange(tipoSel.value); });
-    }
-
-    var redeInp = box.querySelector('#redeSearch');
-    var pdvInp = box.querySelector('#pdvCodeSearch');
-    if(focusField==='rede'){ redeInp.focus(); redeInp.setSelectionRange(redeInp.value.length, redeInp.value.length); }
-    else if(focusField==='pdv'){ pdvInp.focus(); pdvInp.setSelectionRange(pdvInp.value.length, pdvInp.value.length); }
-    redeInp.addEventListener('input', function(){ redeVal = redeInp.value; focusField='rede'; render(); });
-    pdvInp.addEventListener('input', function(){ pdvVal = pdvInp.value; focusField='pdv'; render(); });
-
-    box.querySelectorAll('th[data-k]').forEach(function(th){
+    tableEl.querySelectorAll('th[data-k]').forEach(function(th){
       th.addEventListener('click', function(){
         var k = th.getAttribute('data-k');
         if(sortKey===k) sortDesc=!sortDesc; else { sortKey=k; sortDesc=true; }
         render();
       });
     });
-    box.querySelectorAll('.expand-btn').forEach(function(btn){
+    tableEl.querySelectorAll('.expand-btn').forEach(function(btn){
       btn.addEventListener('click', function(e){
         e.stopPropagation();
         var rid = btn.getAttribute('data-rid');
